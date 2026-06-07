@@ -1,0 +1,1019 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>일일보고</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#f0f7f4; --surface:#fff; --border:#d8ede6;
+    --border-focus:#0f9d58; --text-primary:#1a1a1a;
+    --text-secondary:#6b6b6b; --text-muted:#9b9b9b;
+    --accent:#0f9d58; --accent-light:#e8f5e9;
+    --danger:#e03131; --success:#2f9e44;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text-primary);min-height:100vh;padding:20px 16px 60px;}
+
+  /* 로그인 화면 */
+  .login-wrap{max-width:400px;margin:80px auto 0;text-align:center;}
+  .login-logo{font-size:48px;margin-bottom:16px;}
+  .login-title{font-size:18px;font-weight:600;margin-bottom:8px;}
+  .login-sub{font-size:13px;color:var(--text-secondary);margin-bottom:32px;line-height:1.6;}
+  .btn-google{
+    display:inline-flex;align-items:center;gap:10px;padding:12px 24px;
+    background:#fff;border:1.5px solid #dadce0;border-radius:10px;cursor:pointer;
+    font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:500;color:#3c4043;
+    transition:box-shadow .15s;
+  }
+  .btn-google:hover{box-shadow:0 2px 8px rgba(0,0,0,.12);}
+  .btn-google img{width:20px;height:20px;}
+  .login-err{margin-top:16px;font-size:13px;color:var(--danger);display:none;}
+
+  /* 인증 배너 */
+  .auth-banner{
+    max-width:560px;margin:0 auto 16px;padding:10px 16px;border-radius:10px;
+    font-size:13px;font-weight:500;display:flex;align-items:center;gap:10px;
+  }
+  .auth-banner.loading{background:#f1f3f5;color:var(--text-muted);}
+  .auth-banner.ok{background:#ebfbee;color:#2f9e44;}
+  .auth-banner.error{background:#fff5f5;color:var(--danger);}
+  .user-avatar{
+    width:28px;height:28px;border-radius:50%;background:var(--accent);
+    color:#fff;font-size:12px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  }
+  .user-info{flex:1;}
+  .user-name{font-size:13px;font-weight:600;color:var(--text-primary);}
+  .user-email{font-size:11px;color:var(--text-muted);}
+  .btn-logout{
+    padding:4px 10px;font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:500;
+    color:var(--text-muted);background:none;border:1px solid var(--border);
+    border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap;
+  }
+  .btn-logout:hover{color:var(--danger);border-color:var(--danger);}
+
+  .page-header{max-width:560px;margin:0 auto 20px;display:flex;align-items:center;gap:10px;}
+  .page-header .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);}
+  .page-header h1{font-size:15px;font-weight:600;letter-spacing:-.3px;}
+  .page-header .date{margin-left:auto;font-size:13px;color:var(--text-muted);}
+
+  .card{max-width:560px;margin:0 auto;background:var(--surface);border-radius:16px;border:1px solid var(--border);overflow:hidden;}
+  .card+.card{margin-top:14px;}
+  .card-section{padding:18px 20px;border-bottom:1px solid var(--border);}
+  .card-section:last-child{border-bottom:none;}
+  .section-label{font-size:11px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;}
+
+  .field{margin-bottom:12px;}
+  .field:last-child{margin-bottom:0;}
+  label{display:block;font-size:13px;font-weight:500;color:var(--text-secondary);margin-bottom:5px;}
+  label .req{color:var(--danger);margin-left:2px;}
+
+  select,input[type="text"],input[type="number"],textarea{
+    width:100%;padding:9px 11px;font-family:'Noto Sans KR',sans-serif;font-size:14px;
+    color:var(--text-primary);background:var(--bg);border:1px solid var(--border);
+    border-radius:8px;outline:none;transition:border-color .15s,background .15s;-webkit-appearance:none;
+  }
+  select:focus,input:focus,textarea:focus{border-color:var(--border-focus);background:#fff;}
+  select:disabled{color:var(--text-muted);cursor:not-allowed;}
+  textarea{resize:vertical;min-height:60px;line-height:1.6;}
+  select{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b6b6b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 11px center;padding-right:30px;cursor:pointer;
+  }
+
+  .mode-row{display:flex;gap:6px;margin-bottom:12px;}
+  .mode-btn{flex:1;padding:7px;font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:600;border-radius:8px;border:1.5px solid var(--border);background:var(--bg);color:var(--text-muted);cursor:pointer;transition:all .15s;}
+  .mode-btn.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent);}
+
+  .auto-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .auto-field{padding:9px 11px;background:var(--accent-light);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--accent);font-weight:500;min-height:38px;display:flex;align-items:center;}
+  .auto-field.empty{color:var(--text-muted);background:var(--bg);font-weight:400;}
+
+  .ws-group{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:7px;}
+  .ws-btn{padding:9px 4px;font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:500;color:var(--text-secondary);background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;text-align:center;}
+  .ws-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .ws-btn.ws-내근.active{background:#e8f5e9;border-color:#2e7d32;color:#2e7d32;}
+  .ws-btn.ws-외근.active{background:#e3f2fd;border-color:#1565c0;color:#1565c0;}
+  .ws-btn.ws-출장.active{background:#fff8e1;border-color:#e65100;color:#e65100;}
+  .ws-btn.ws-재택.active{background:#f3e5f5;border-color:#6a1b9a;color:#6a1b9a;}
+
+  .sup-group{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;}
+  .sup-btn{padding:9px 4px;font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:500;color:var(--text-secondary);background:var(--bg);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;text-align:center;}
+  .sup-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .sup-btn.active{background:var(--accent-light);border-color:var(--accent);color:var(--accent);font-weight:600;}
+
+  .time-row{display:flex;align-items:center;gap:7px;}
+  .time-row input[type="number"]{width:76px;text-align:center;padding:9px 6px;}
+  .time-row span{font-size:13px;color:var(--text-secondary);white-space:nowrap;}
+  .time-preview{margin-top:5px;font-size:12px;color:var(--accent);font-weight:500;min-height:16px;}
+  .time-warn{margin-top:4px;font-size:12px;color:var(--danger);display:none;}
+
+  .btn-add{width:100%;padding:11px;font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:600;color:#fff;background:var(--accent);border:none;border-radius:10px;cursor:pointer;letter-spacing:-.2px;transition:background .15s,transform .1s;}
+  .btn-add:hover{background:#0b7d45;}
+  .btn-add:active{transform:scale(.98);}
+  .btn-add:disabled{background:#8fcfb0;cursor:not-allowed;}
+  .btn-update{width:100%;padding:11px;font-family:'Noto Sans KR',sans-serif;font-size:14px;font-weight:600;color:#fff;background:#e67700;border:none;border-radius:10px;cursor:pointer;display:none;margin-top:0;}
+  .btn-update:hover{background:#cc6a00;}
+  .btn-cancel{width:100%;margin-top:8px;padding:9px;font-family:'Noto Sans KR',sans-serif;font-size:13px;font-weight:500;background:none;border:1px solid var(--border);border-radius:8px;cursor:pointer;color:var(--text-secondary);display:none;}
+
+  .entry-item{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;margin-bottom:8px;background:var(--bg);border:1px solid var(--border);border-radius:10px;}
+  .entry-item.editing{border-color:var(--accent);background:#f0fff6;}
+  .entry-num{width:22px;height:22px;border-radius:50%;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;}
+  .entry-body{flex:1;line-height:1.5;}
+  .entry-main{font-size:13px;font-weight:600;color:var(--text-primary);}
+  .entry-sub{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+  .entry-tags{display:flex;gap:5px;margin-top:4px;flex-wrap:wrap;}
+  .tag{padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;}
+  .tag-sup{background:#e8eaf6;color:#283593;}
+  .tag-time{background:var(--accent-light);color:var(--accent);}
+  .tag-synced{background:#e8f5e9;color:#2e7d32;}
+  .tag-ws-내근{background:#e8f5e9;color:#2e7d32;}
+  .tag-ws-외근{background:#e3f2fd;color:#1565c0;}
+  .tag-ws-출장{background:#fff8e1;color:#e65100;}
+  .tag-ws-재택{background:#f3e5f5;color:#6a1b9a;}
+  .entry-actions{display:flex;flex-direction:column;gap:4px;flex-shrink:0;}
+  .btn-edit,.btn-del{width:28px;height:28px;border-radius:6px;background:none;border:1px solid var(--border);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;transition:all .15s;}
+  .btn-edit:hover{background:#e8f5e9;border-color:var(--accent);}
+  .btn-del:hover{background:#fee2e2;border-color:var(--danger);color:var(--danger);}
+
+  .empty-msg{text-align:center;font-size:13px;color:var(--text-muted);padding:20px 0;}
+  .total-bar{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;background:var(--accent-light);border-radius:10px;margin-top:4px;}
+  .total-label{font-size:13px;font-weight:500;color:var(--accent);}
+  .total-value{font-size:15px;font-weight:700;color:var(--accent);}
+  .total-warn{font-size:11px;color:var(--danger);font-weight:600;}
+
+  .btn-submit{width:100%;padding:13px;font-family:'Noto Sans KR',sans-serif;font-size:15px;font-weight:600;color:#fff;background:#1a56db;border:none;border-radius:10px;cursor:pointer;letter-spacing:-.2px;transition:background .15s;margin-top:12px;display:none;}
+  .btn-submit:hover{background:#1648c0;}
+  .btn-submit:disabled{background:#93b4f5;cursor:not-allowed;}
+
+  .spinner{display:none;width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;margin:0 auto;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .toast{display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 22px;border-radius:10px;font-size:14px;font-weight:500;color:#fff;z-index:999;white-space:nowrap;}
+  .toast.success{background:var(--success);display:block;}
+  .toast.error{background:var(--danger);display:block;}
+
+  #login-screen{display:none;}
+  #main-content{display:none;}
+
+  /* Apps Script URL 설정 패널 */
+  .config-panel{
+    max-width:560px;margin:0 auto 16px;padding:14px 16px;
+    background:#fffbeb;border:1px solid #fbbf24;border-radius:10px;
+  }
+  .config-panel.ok{background:#ebfbee;border-color:#6ee7b7;}
+  .config-panel-title{font-size:12px;font-weight:600;color:#92400e;margin-bottom:8px;}
+  .config-panel.ok .config-panel-title{color:#065f46;}
+  .config-panel-row{display:flex;gap:8px;}
+  .config-panel input{
+    flex:1;padding:7px 10px;font-size:12px;font-family:'DM Mono','Courier New',monospace;
+    background:#fff;border:1px solid #d1d5db;border-radius:6px;color:#374151;outline:none;
+  }
+  .config-panel input:focus{border-color:var(--border-focus);}
+  .config-panel-btn{
+    padding:7px 14px;font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:600;
+    background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;
+  }
+  .config-panel-btn:hover{background:#0b7d45;}
+</style>
+</head>
+<body>
+
+<!-- 로그인 화면 -->
+<div id="login-screen">
+  <div class="login-wrap">
+    <div class="login-logo">&#128203;</div>
+    <div class="login-title">일일보고 시스템</div>
+    <div class="login-sub">Google 계정으로 로그인하여<br>일일보고를 작성하세요.</div>
+    <button class="btn-google" onclick="googleLogin()">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
+      Google 계정으로 로그인
+    </button>
+    <div class="login-err" id="login-err"></div>
+  </div>
+</div>
+
+<!-- 로딩 배너 -->
+<div class="auth-banner loading" id="auth-banner" style="display:none">&#9203; 데이터 로딩 중...</div>
+
+<!-- 메인 -->
+<div id="main-content">
+
+  <!-- Apps Script URL 설정 패널 -->
+  <div class="config-panel" id="config-panel">
+    <div class="config-panel-title" id="config-panel-title">&#9881;&#65039; Apps Script URL 설정 (최초 1회)</div>
+    <div class="config-panel-row">
+      <input type="text" id="script-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+      <button class="config-panel-btn" onclick="saveScriptUrl()">저장</button>
+    </div>
+  </div>
+
+  <!-- 사용자 배너 -->
+  <div class="auth-banner ok" id="user-banner" style="display:none">
+    <div class="user-avatar" id="user-avatar"></div>
+    <div class="user-info">
+      <div class="user-name" id="user-name"></div>
+      <div class="user-email" id="user-email"></div>
+    </div>
+    <button class="btn-logout" onclick="logout(false)">로그아웃</button>
+    <span id="session-remain" style="font-size:11px;color:var(--text-muted);white-space:nowrap;margin-left:2px;"></span>
+  </div>
+
+  <div class="page-header">
+    <div class="dot"></div>
+    <h1>일일보고</h1>
+    <span class="date" id="today-date"></span>
+  </div>
+
+  <!-- 입력 카드 -->
+  <div class="card" id="input-card">
+
+    <!-- 1. 근무유형 -->
+    <div class="card-section">
+      <div class="section-label">근무유형 <span style="color:var(--danger);font-size:10px">*</span></div>
+      <div class="ws-group">
+        <button class="ws-btn ws-내근" data-val="내근" onclick="selectWsBtn(this)">&#127970; 내근</button>
+        <button class="ws-btn ws-외근" data-val="외근" onclick="selectWsBtn(this)">&#128663; 외근</button>
+        <button class="ws-btn ws-출장" data-val="출장" onclick="selectWsBtn(this)">&#9992;&#65039; 출장</button>
+        <button class="ws-btn ws-재택" data-val="재택" onclick="selectWsBtn(this)">&#127968; 재택</button>
+      </div>
+      <input type="hidden" id="work-style">
+    </div>
+
+    <!-- 2. 지원구분 -->
+    <div class="card-section">
+      <div class="section-label">지원구분 <span style="color:var(--danger);font-size:10px">*</span></div>
+      <div class="sup-group">
+        <button class="sup-btn" data-val="구축"    onclick="onSupportTypeSelect(this)">&#128296; 구축</button>
+        <button class="sup-btn" data-val="유지보수" onclick="onSupportTypeSelect(this)">&#128295; 유지보수</button>
+        <button class="sup-btn" data-val="기술미팅" onclick="onSupportTypeSelect(this)">&#128172; 기술미팅</button>
+        <button class="sup-btn" data-val="POC"     onclick="onSupportTypeSelect(this)">&#128300; POC</button>
+        <button class="sup-btn" data-val="제안발표" onclick="onSupportTypeSelect(this)">&#128202; 제안발표</button>
+        <button class="sup-btn" data-val="기타"    onclick="onSupportTypeSelect(this)">&#128203; 기타</button>
+      </div>
+      <input type="hidden" id="support-type">
+    </div>
+
+    <!-- 3. 업무 정보 -->
+    <div class="card-section" id="client-section" style="opacity:.45;pointer-events:none">
+      <div class="section-label">업무 정보
+        <span id="client-section-hint" style="font-size:10px;color:var(--text-muted);font-weight:400;letter-spacing:0;text-transform:none">
+          (지원구분을 먼저 선택하세요)
+        </span>
+      </div>
+      <div class="mode-row">
+        <button class="mode-btn active" id="mode-sel-btn" onclick="setMode('select')">목록 선택</button>
+        <button class="mode-btn"        id="mode-dir-btn" onclick="setMode('direct')">직접 입력</button>
+      </div>
+      <!-- 목록 선택 -->
+      <div id="mode-select">
+        <div class="field">
+          <label>고객사 <span class="req">*</span></label>
+          <select id="client-select" onchange="onClientChange()"><option value="">고객사 선택</option></select>
+        </div>
+        <div class="field">
+          <label>프로젝트명 <span class="req">*</span></label>
+          <select id="project-select" onchange="onProjectChange()" disabled><option value="">고객사를 먼저 선택하세요</option></select>
+        </div>
+        <div class="auto-row">
+          <div><label>PJT 코드</label><div class="auto-field empty" id="pjt-display">자동 표시</div></div>
+          <div><label>업무유형</label><div class="auto-field empty" id="wtype-display">자동 표시</div></div>
+        </div>
+      </div>
+      <!-- 직접 입력 -->
+      <div id="mode-direct" style="display:none">
+        <div class="field">
+          <label>고객사명 <span class="req">*</span></label>
+          <input type="text" id="client-direct" placeholder="고객사명 입력" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>프로젝트명 <span class="req">*</span></label>
+          <input type="text" id="project-direct" placeholder="프로젝트명 입력" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>PJT 코드 <span style="color:var(--text-muted);font-weight:400">(선택)</span></label>
+          <input type="text" id="pjtcode-direct" placeholder="PJT 코드" autocomplete="off">
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 지원 내용 -->
+    <div class="card-section">
+      <div class="section-label">지원 내용</div>
+      <div class="field">
+        <label>지원 시간 <span class="req">*</span></label>
+        <div class="time-row">
+          <input type="number" id="hours"   min="0" max="24" placeholder="0" oninput="updatePreview()">
+          <span>시간</span>
+          <input type="number" id="minutes" min="0" max="59" step="10" placeholder="0" oninput="updatePreview()">
+          <span>분</span>
+        </div>
+        <div class="time-preview" id="time-preview"></div>
+        <div class="time-warn"    id="time-warn">&#9888;&#65039; 1일 총 지원시간이 24시간을 초과합니다</div>
+      </div>
+      <div class="field">
+        <label>비고 <span style="color:var(--text-muted);font-weight:400">(선택)</span></label>
+        <textarea id="note" placeholder="특이사항, 메모 등"></textarea>
+      </div>
+      <button class="btn-add"    id="add-btn"    onclick="addEntry()">＋ 일일보고 추가</button>
+      <button class="btn-update" id="update-btn" onclick="updateEntry()">&#9999;&#65039; 수정 완료</button>
+      <button class="btn-cancel" id="cancel-btn" onclick="cancelEdit()">취소</button>
+    </div>
+
+  </div>
+
+  <!-- 목록 카드 -->
+  <div class="card" style="margin-top:14px;">
+    <div class="card-section">
+      <div class="section-label" style="margin-bottom:12px">오늘 등록된 업무</div>
+      <div id="entry-list"><div class="empty-msg">등록된 항목이 없습니다</div></div>
+      <div class="total-bar" id="total-bar" style="display:none">
+        <span class="total-label">&#128202; 오늘 총 지원시간</span>
+        <div style="text-align:right">
+          <div class="total-value" id="total-time"></div>
+          <div class="total-warn" id="total-warn" style="display:none">24시간 초과!</div>
+        </div>
+      </div>
+      <button class="btn-submit" id="submit-btn" onclick="submitAll()">
+        <span id="submit-text">&#128228; 일일보고 등록</span>
+        <div class="spinner" id="submit-spinner"></div>
+      </button>
+    </div>
+  </div>
+
+</div><!-- /#main-content -->
+<div class="toast" id="toast"></div>
+
+<!-- Google Identity Services -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+// =========================================================
+//  ★ 설정값 — 배포 전 반드시 수정하세요
+// =========================================================
+// Google Cloud Console → API 및 서비스 → 사용자 인증 정보
+// → OAuth 2.0 클라이언트 ID → 웹 애플리케이션
+const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE';
+
+// =========================================================
+//  전역 상태
+// =========================================================
+let currentUser  = null;   // { name, email, idToken }
+let allClients   = [];     // A탭 마스터 데이터
+let entries      = [];     // 현재 세션 입력 항목
+let editingIdx   = -1;
+let inputMode    = 'select';
+let selectedPjt  = null;
+
+const SESSION_KEY     = 'daily_report_user_v2';
+const SCRIPT_URL_KEY  = 'daily_report_script_url';
+const SESSION_TIMEOUT = 10 * 60 * 1000; // 10분
+const LAST_ACTIVE_KEY = 'daily_report_last_active';
+let   inactiveTimer   = null;
+
+// =========================================================
+//  날짜
+// =========================================================
+const today   = new Date();
+const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+document.getElementById('today-date').textContent =
+  `${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')} (${['일','월','화','수','목','금','토'][today.getDay()]})`;
+
+// =========================================================
+//  Apps Script URL 설정 패널
+// =========================================================
+function getScriptUrl() {
+  return localStorage.getItem(SCRIPT_URL_KEY) || '';
+}
+
+function saveScriptUrl() {
+  const url = document.getElementById('script-url-input').value.trim();
+  if (!url.startsWith('https://script.google.com')) {
+    showToast('올바른 Apps Script URL을 입력해주세요', 'error'); return;
+  }
+  localStorage.setItem(SCRIPT_URL_KEY, url);
+  updateConfigPanel(url);
+  showToast('URL이 저장되었습니다. 데이터를 다시 불러옵니다.', 'success');
+  if (currentUser) loadSheetData();
+}
+
+function updateConfigPanel(url) {
+  const panel = document.getElementById('config-panel');
+  if (url) {
+    panel.classList.add('ok');
+    document.getElementById('config-panel-title').textContent = '연결됨: ' + url.replace('https://script.google.com/macros/s/','').substring(0,36) + '...';
+    document.getElementById('script-url-input').value = url;
+  } else {
+    panel.classList.remove('ok');
+    document.getElementById('config-panel-title').textContent = 'Apps Script URL 설정 (최초 1회)';
+  }
+}
+
+// =========================================================
+//  Google 로그인
+// =========================================================
+function googleLogin() {
+  if (typeof google === 'undefined') {
+    document.getElementById('login-err').textContent = 'Google 라이브러리 로딩 중입니다. 잠시 후 다시 시도해 주세요.';
+    document.getElementById('login-err').style.display = 'block';
+    return;
+  }
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: onGoogleCallback,
+    auto_select: false,
+  });
+  google.accounts.id.prompt((notification) => {
+    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+      google.accounts.id.renderButton(
+        document.querySelector('.btn-google'),
+        { theme:'outline', size:'large', text:'signin_with', locale:'ko' }
+      );
+    }
+  });
+}
+
+async function onGoogleCallback(response) {
+  try {
+    const base64url = response.credential.split('.')[1];
+    const base64    = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded    = base64.padEnd(base64.length + (4 - base64.length % 4) % 4, '=');
+    const payload   = JSON.parse(decodeURIComponent(
+      atob(padded).split('').map(c => '%' + c.charCodeAt(0).toString(16).padStart(2,'0')).join('')
+    ));
+    currentUser = { name: payload.name, email: payload.email, idToken: response.credential };
+    localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
+    updateLastActive();
+    await loadMainContent();
+  } catch(e) {
+    document.getElementById('login-err').textContent = '로그인 처리 중 오류가 발생했습니다: ' + e.message;
+    document.getElementById('login-err').style.display = 'block';
+  }
+}
+
+function logout(isAuto) {
+  clearTimeout(inactiveTimer);
+  currentUser = null;
+  entries     = [];
+  allClients  = [];
+  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(LAST_ACTIVE_KEY);
+  document.getElementById('main-content').style.display  = 'none';
+  document.getElementById('user-banner').style.display   = 'none';
+  document.getElementById('login-screen').style.display  = 'block';
+  const errEl = document.getElementById('login-err');
+  if (isAuto) {
+    errEl.textContent   = '⏱ 10분 미사용으로 자동 로그아웃되었습니다. 다시 로그인해 주세요.';
+    errEl.style.display = 'block';
+  } else {
+    errEl.style.display = 'none';
+  }
+  if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+}
+
+// =========================================================
+//  세션 유지
+// =========================================================
+function updateLastActive() {
+  localStorage.setItem(LAST_ACTIVE_KEY, Date.now().toString());
+  resetInactiveTimer();
+}
+function resetInactiveTimer() {
+  clearTimeout(inactiveTimer);
+  inactiveTimer = setTimeout(() => logout(true), SESSION_TIMEOUT);
+}
+['click','keydown','touchstart','scroll'].forEach(evt => {
+  document.addEventListener(evt, () => { if (currentUser) updateLastActive(); }, { passive:true });
+});
+setInterval(() => {
+  if (!currentUser) return;
+  const last   = parseInt(localStorage.getItem(LAST_ACTIVE_KEY) || '0');
+  const remain = Math.max(0, SESSION_TIMEOUT - (Date.now() - last));
+  const mm     = Math.floor(remain / 60000);
+  const ss     = Math.floor((remain % 60000) / 1000);
+  const el     = document.getElementById('session-remain');
+  if (el) el.textContent = `세션 ${mm}:${String(ss).padStart(2,'0')}`;
+}, 1000);
+
+// =========================================================
+//  페이지 로드 → 세션 복원 or 로그인
+// =========================================================
+window.addEventListener('load', () => {
+  // URL 설정 패널 초기화
+  const savedUrl = getScriptUrl();
+  updateConfigPanel(savedUrl);
+
+  // 세션 복원 시도
+  const saved      = localStorage.getItem(SESSION_KEY);
+  const lastActive = parseInt(localStorage.getItem(LAST_ACTIVE_KEY) || '0');
+  const elapsed    = Date.now() - lastActive;
+
+  if (saved && elapsed < SESSION_TIMEOUT) {
+    try {
+      currentUser = JSON.parse(saved);
+      updateLastActive();
+      loadMainContent();
+      return;
+    } catch(e) {
+      localStorage.removeItem(SESSION_KEY);
+    }
+  }
+
+  // 로그인 화면 표시
+  document.getElementById('login-screen').style.display = 'block';
+  if (saved && elapsed >= SESSION_TIMEOUT) {
+    const errEl = document.getElementById('login-err');
+    errEl.textContent   = '⏱ 세션이 만료되었습니다. 다시 로그인해 주세요.';
+    errEl.style.display = 'block';
+    localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(LAST_ACTIVE_KEY);
+  }
+  if (GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE' && typeof google !== 'undefined') {
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCallback });
+    google.accounts.id.prompt();
+  }
+});
+
+// =========================================================
+//  메인 화면 로드
+// =========================================================
+async function loadMainContent() {
+  document.getElementById('login-screen').style.display  = 'none';
+  document.getElementById('auth-banner').style.display   = 'block';
+  document.getElementById('auth-banner').className       = 'auth-banner loading';
+  document.getElementById('auth-banner').textContent     = '⏳ 데이터 로딩 중...';
+
+  // 사용자 배너
+  document.getElementById('user-avatar').textContent    = currentUser.name.charAt(0);
+  document.getElementById('user-name').textContent      = currentUser.name;
+  document.getElementById('user-email').textContent     = currentUser.email;
+  document.getElementById('user-banner').style.display  = 'flex';
+  document.getElementById('main-content').style.display = 'block';
+
+  await loadSheetData();
+}
+
+async function loadSheetData() {
+  const url = getScriptUrl();
+  if (!url) {
+    document.getElementById('auth-banner').className   = 'auth-banner error';
+    document.getElementById('auth-banner').textContent = '⚠️ Apps Script URL을 먼저 설정해주세요.';
+    return;
+  }
+
+  document.getElementById('auth-banner').className   = 'auth-banner loading';
+  document.getElementById('auth-banner').textContent = '⏳ 데이터 로딩 중...';
+
+  try {
+    const res  = await fetch(url + '?action=getData', { method:'GET', redirect:'follow' });
+    const text = await res.text();
+    const data = JSON.parse(text);
+
+    if (data.status !== 'ok') throw new Error(data.message || '알 수 없는 오류');
+
+    // A탭 프로젝트 목록을 allClients 형식으로 변환
+    allClients = (data.data.projects || []).map(p => ({
+      client:   p.customer,
+      project:  p.projectName,
+      pjtCode:  p.projectId,
+      workType: p.workType || '-'
+    }));
+
+    // 당일 본인 데이터 복원
+    const todayRows = (data.data.todayRows || []).filter(r =>
+      r.worker === currentUser.name || r.email === currentUser.email
+    );
+    if (todayRows.length > 0 && entries.length === 0) {
+      entries = todayRows.map(r => ({ ...r, synced: true }));
+      renderEntries();
+    }
+
+    document.getElementById('auth-banner').style.display = 'none';
+
+    const msg = todayRows.length > 0
+      ? `📋 오늘 등록된 업무 ${todayRows.length}건 로드됨`
+      : `✅ 데이터 로드 완료 (프로젝트 ${allClients.length}건)`;
+    showToast(msg, 'success');
+
+  } catch(e) {
+    document.getElementById('auth-banner').className   = 'auth-banner error';
+    document.getElementById('auth-banner').textContent = '⚠️ 데이터 로딩 실패: ' + e.message + ' (보고서 작성은 가능합니다)';
+  }
+}
+
+// =========================================================
+//  지원구분 선택
+// =========================================================
+function onSupportTypeSelect(el) {
+  el.closest('.sup-group').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('support-type').value = el.dataset.val;
+
+  const section = document.getElementById('client-section');
+  section.style.opacity       = '1';
+  section.style.pointerEvents = 'auto';
+  document.getElementById('client-section-hint').textContent = '';
+
+  resetClientFields();
+  buildClientSelect(el.dataset.val);
+}
+
+function buildClientSelect(supportType) {
+  const sel = document.getElementById('client-select');
+  sel.innerHTML = '<option value="">고객사 선택</option>';
+
+  const workTypeMap = {
+    '구축':    ['구축'],
+    '유지보수': ['유지보수'],
+    '기술미팅': null,
+    'POC':     null,
+    '제안발표': null,
+    '기타':    null,
+  };
+  const allowedTypes = workTypeMap[supportType] || null;
+  const filtered     = allowedTypes
+    ? allClients.filter(r => allowedTypes.includes(r.workType))
+    : allClients;
+
+  const uniqueClients = [...new Set(filtered.map(r => r.client))].sort();
+  if (uniqueClients.length === 0) {
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = '해당 고객사 없음 (직접 입력 사용)'; o.disabled = true;
+    sel.appendChild(o);
+  } else {
+    uniqueClients.forEach(c => {
+      const o = document.createElement('option'); o.value = c; o.textContent = c;
+      sel.appendChild(o);
+    });
+  }
+  window._filteredClients = filtered;
+}
+
+function onClientChange() {
+  const client  = document.getElementById('client-select').value;
+  const projSel = document.getElementById('project-select');
+  setAutoDisplay('', ''); selectedPjt = null;
+  if (!client) {
+    projSel.innerHTML = '<option value="">고객사를 먼저 선택하세요</option>';
+    projSel.disabled  = true; return;
+  }
+  const source   = window._filteredClients || allClients;
+  const filtered = source.filter(r => r.client === client);
+  projSel.innerHTML = '<option value="">프로젝트 선택</option>';
+  filtered.forEach((r, idx) => {
+    const o = document.createElement('option');
+    o.value = r.project; o.textContent = r.project;
+    o.dataset.idx = allClients.indexOf(r);
+    projSel.appendChild(o);
+  });
+  projSel.disabled = false;
+  if (filtered.length === 1) { projSel.selectedIndex = 1; onProjectChange(); }
+}
+
+function onProjectChange() {
+  const projSel = document.getElementById('project-select');
+  const opt     = projSel.options[projSel.selectedIndex];
+  if (!opt || opt.dataset.idx === undefined) { setAutoDisplay('',''); selectedPjt = null; return; }
+  const row = allClients[parseInt(opt.dataset.idx)];
+  selectedPjt = row;
+  setAutoDisplay(row.pjtCode, row.workType);
+}
+
+function setAutoDisplay(pjt, wt) {
+  const p = document.getElementById('pjt-display');
+  const w = document.getElementById('wtype-display');
+  p.textContent = pjt || '자동 표시'; p.className = pjt ? 'auto-field' : 'auto-field empty';
+  w.textContent = wt  || '자동 표시'; w.className  = wt  ? 'auto-field' : 'auto-field empty';
+}
+
+function setMode(mode) {
+  inputMode = mode;
+  document.getElementById('mode-select').style.display = mode === 'select' ? 'block' : 'none';
+  document.getElementById('mode-direct').style.display = mode === 'direct' ? 'block' : 'none';
+  document.getElementById('mode-sel-btn').classList.toggle('active', mode === 'select');
+  document.getElementById('mode-dir-btn').classList.toggle('active', mode === 'direct');
+  resetClientFields();
+}
+
+function resetClientFields() {
+  setAutoDisplay('', ''); selectedPjt = null;
+  document.getElementById('client-select').value = '';
+  document.getElementById('project-select').innerHTML = '<option value="">고객사를 먼저 선택하세요</option>';
+  document.getElementById('project-select').disabled  = true;
+  document.getElementById('client-direct').value  = '';
+  document.getElementById('project-direct').value = '';
+  document.getElementById('pjtcode-direct').value = '';
+}
+
+function selectWsBtn(el) {
+  el.closest('.ws-group').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('work-style').value = el.dataset.val;
+  updatePreview();
+}
+
+// =========================================================
+//  시간 미리보기
+// =========================================================
+function updatePreview() {
+  const h = parseInt(document.getElementById('hours').value)   || 0;
+  const m = parseInt(document.getElementById('minutes').value) || 0;
+  const t = h * 60 + m;
+  document.getElementById('time-preview').textContent = t > 0 ? '→ ' + fmt(t) : '';
+  const editMin = editingIdx >= 0 ? entries[editingIdx].minutes : 0;
+  const other   = entries.reduce((s, e) => s + e.minutes, 0) - editMin;
+  document.getElementById('time-warn').style.display = (other + t) > 1440 ? 'block' : 'none';
+}
+
+function fmt(min) {
+  if (min <= 0) return '0분';
+  const h = Math.floor(min / 60), m = min % 60;
+  if (h && m) return `${h}시간 ${m}분`;
+  return h ? `${h}시간` : `${m}분`;
+}
+
+// =========================================================
+//  입력 수집
+// =========================================================
+function collectInput() {
+  if (!currentUser) { showToast('로그인이 필요합니다', 'error'); return null; }
+  const workStyle   = document.getElementById('work-style').value;
+  const supportType = document.getElementById('support-type').value;
+  const h  = parseInt(document.getElementById('hours').value)   || 0;
+  const m  = parseInt(document.getElementById('minutes').value) || 0;
+  const note = document.getElementById('note').value.trim();
+  const totalMin = h * 60 + m;
+
+  let client, project, pjtCode, workType;
+  if (inputMode === 'select') {
+    if (!document.getElementById('client-select').value) { showToast('고객사를 선택해 주세요', 'error'); return null; }
+    if (!selectedPjt) { showToast('프로젝트를 선택해 주세요', 'error'); return null; }
+    client = selectedPjt.client; project = selectedPjt.project;
+    pjtCode = selectedPjt.pjtCode; workType = selectedPjt.workType;
+  } else {
+    client  = document.getElementById('client-direct').value.trim();
+    project = document.getElementById('project-direct').value.trim();
+    pjtCode = document.getElementById('pjtcode-direct').value.trim() || '-';
+    workType = '-';
+    if (!client)  { showToast('고객사명을 입력해 주세요', 'error'); return null; }
+    if (!project) { showToast('프로젝트명을 입력해 주세요', 'error'); return null; }
+  }
+
+  if (!workStyle)   { showToast('근무유형을 선택해 주세요', 'error'); return null; }
+  if (!supportType) { showToast('지원구분을 선택해 주세요', 'error'); return null; }
+  if (totalMin <= 0){ showToast('지원 시간을 입력해 주세요', 'error'); return null; }
+
+  const editMin = editingIdx >= 0 ? entries[editingIdx].minutes : 0;
+  const other   = entries.reduce((s, e) => s + e.minutes, 0) - editMin;
+  if (other + totalMin > 1440) { showToast('1일 총 지원시간이 24시간을 초과합니다', 'error'); return null; }
+
+  return {
+    date: dateStr, worker: currentUser.name, email: currentUser.email,
+    pjtCode, client, project, workType, supportType, workStyle,
+    minutes: totalMin, timeDisplay: fmt(totalMin), note: note || '-', synced: false
+  };
+}
+
+// =========================================================
+//  추가 / 수정 / 삭제
+// =========================================================
+function addEntry() {
+  const p = collectInput(); if (!p) return;
+  entries.push(p);
+  renderEntries(); clearForm();
+  showToast('✅ 항목이 추가되었습니다', 'success');
+}
+
+function startEdit(i) {
+  editingIdx = i;
+  const e = entries[i];
+
+  // 근무유형
+  document.querySelectorAll('.ws-btn').forEach(b => {
+    b.classList.remove('active');
+    if (b.dataset.val === e.workStyle) b.classList.add('active');
+  });
+  document.getElementById('work-style').value = e.workStyle;
+
+  // 지원구분 + 업무정보 섹션 활성화
+  document.querySelectorAll('.sup-btn').forEach(b => {
+    b.classList.remove('active');
+    if (b.dataset.val === e.supportType) b.classList.add('active');
+  });
+  document.getElementById('support-type').value = e.supportType;
+  const section = document.getElementById('client-section');
+  section.style.opacity       = '1';
+  section.style.pointerEvents = 'auto';
+  document.getElementById('client-section-hint').textContent = '';
+
+  // 직접 입력 모드로 채움
+  setMode('direct');
+  document.getElementById('client-direct').value  = e.client;
+  document.getElementById('project-direct').value = e.project;
+  document.getElementById('pjtcode-direct').value = e.pjtCode !== '-' ? e.pjtCode : '';
+
+  // 시간 / 비고
+  document.getElementById('hours').value   = Math.floor(e.minutes / 60);
+  document.getElementById('minutes').value = e.minutes % 60;
+  document.getElementById('note').value    = e.note !== '-' ? e.note : '';
+  updatePreview();
+
+  document.getElementById('add-btn').style.display    = 'none';
+  document.getElementById('update-btn').style.display = 'block';
+  document.getElementById('cancel-btn').style.display = 'block';
+
+  renderEntries();
+  document.getElementById('input-card').scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
+function updateEntry() {
+  const p = collectInput(); if (!p) return;
+  p.synced         = false;
+  p.isEdit         = true;
+  p.originalEntry  = { ...entries[editingIdx] };
+  entries[editingIdx] = p;
+  editingIdx = -1;
+  renderEntries(); clearForm();
+  showToast('✅ 수정되었습니다. [일일보고 등록] 버튼으로 저장해 주세요.', 'success');
+}
+
+function cancelEdit() { editingIdx = -1; clearForm(); renderEntries(); }
+
+async function removeEntry(i) {
+  const entry = entries[i];
+  if (entry.synced) {
+    const url = getScriptUrl();
+    if (url) {
+      try {
+        await fetch(url, {
+          method: 'POST', redirect: 'follow',
+          body: JSON.stringify({ ...entry, action: 'delete' })
+        });
+      } catch(e) { console.error('삭제 요청 실패:', e); }
+    }
+  }
+  entries.splice(i, 1);
+  if (editingIdx === i) { editingIdx = -1; clearForm(); }
+  else if (editingIdx > i) editingIdx--;
+  renderEntries();
+  showToast('🗑 항목이 삭제되었습니다', 'success');
+}
+
+// =========================================================
+//  등록 (B탭 동기화)
+// =========================================================
+async function submitAll() {
+  const unsynced = entries.filter(e => !e.synced);
+  if (!unsynced.length) { showToast('등록할 항목이 없습니다', 'error'); return; }
+  if (entries.reduce((s, e) => s + e.minutes, 0) > 1440) {
+    showToast('24시간 초과로 등록할 수 없습니다', 'error'); return;
+  }
+  const url = getScriptUrl();
+  if (!url) { showToast('Apps Script URL을 먼저 설정해주세요', 'error'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  document.getElementById('submit-text').style.display    = 'none';
+  document.getElementById('submit-spinner').style.display = 'block';
+
+  try {
+    const rows = unsynced.map(r => ({
+      engineer:    r.worker,
+      email:       r.email,
+      date:        r.date,
+      hours:       r.minutes / 60,
+      customer:    r.client,
+      projectId:   r.pjtCode,
+      projectName: r.project,
+      workType:    r.workType,
+      type:        r.supportType,
+      workStyle:   r.workStyle,
+      difficulty:  r.difficulty || 0,
+      memo:        r.note,
+      submittedAt: new Date().toISOString(),
+      action:      r.isEdit ? 'update' : 'insert'
+    }));
+
+    const res  = await fetch(url, {
+      method: 'POST', redirect: 'follow',
+      body: JSON.stringify({ action: 'appendRows', rows })
+    });
+    const json = await res.json();
+    if (json.status !== 'ok') throw new Error(json.message || '저장 실패');
+
+    unsynced.forEach(e => { e.synced = true; e.isEdit = false; delete e.originalEntry; });
+    showToast(`✅ ${unsynced.length}건 등록 완료`, 'success');
+    renderEntries();
+  } catch(e) {
+    showToast('❌ 등록 실패: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    document.getElementById('submit-text').style.display    = 'block';
+    document.getElementById('submit-spinner').style.display = 'none';
+  }
+}
+
+// =========================================================
+//  폼 초기화
+// =========================================================
+function clearForm() {
+  resetClientFields();
+  document.getElementById('support-type').value = '';
+  document.querySelectorAll('.sup-btn').forEach(b => b.classList.remove('active'));
+  const section = document.getElementById('client-section');
+  section.style.opacity       = '.45';
+  section.style.pointerEvents = 'none';
+  document.getElementById('client-section-hint').textContent = '(지원구분을 먼저 선택하세요)';
+  window._filteredClients = null;
+  document.getElementById('hours').value   = '';
+  document.getElementById('minutes').value = '';
+  document.getElementById('note').value    = '';
+  document.getElementById('time-preview').textContent = '';
+  document.getElementById('time-warn').style.display  = 'none';
+  document.querySelectorAll('.ws-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('work-style').value = '';
+  document.getElementById('add-btn').style.display    = 'block';
+  document.getElementById('update-btn').style.display = 'none';
+  document.getElementById('cancel-btn').style.display = 'none';
+}
+
+// =========================================================
+//  렌더링
+// =========================================================
+const wsEmoji = { 내근:'🏢', 외근:'🚗', 출장:'✈️', 재택:'🏠' };
+
+function renderEntries() {
+  const list   = document.getElementById('entry-list');
+  const bar    = document.getElementById('total-bar');
+  const sub    = document.getElementById('submit-btn');
+  const addBtn = document.getElementById('add-btn');
+  list.innerHTML = '';
+
+  if (!entries.length) {
+    list.innerHTML = '<div class="empty-msg">등록된 항목이 없습니다</div>';
+    bar.style.display = 'none';
+    sub.style.display = 'none';
+    addBtn.disabled   = false;
+    addBtn.textContent = '＋ 일일보고 추가';
+    return;
+  }
+
+  entries.forEach((e, i) => {
+    const el = document.createElement('div');
+    el.className = 'entry-item' + (editingIdx === i ? ' editing' : '');
+    el.innerHTML = `
+      <div class="entry-num">${i + 1}</div>
+      <div class="entry-body">
+        <div class="entry-main">${e.client} · ${e.project}</div>
+        <div class="entry-sub">[${e.pjtCode}] ${e.workType}${e.note !== '-' ? ' · ' + e.note : ''}</div>
+        <div class="entry-tags">
+          <span class="tag tag-ws-${e.workStyle}">${wsEmoji[e.workStyle] || ''} ${e.workStyle}</span>
+          <span class="tag tag-sup">${e.supportType}</span>
+          <span class="tag tag-time">⏱ ${e.timeDisplay}</span>
+          ${e.synced
+            ? '<span class="tag tag-synced">✓ 등록됨</span>'
+            : '<span class="tag" style="background:#fff3e0;color:#e65100">● 미등록</span>'}
+        </div>
+      </div>
+      <div class="entry-actions">
+        <button class="btn-edit" onclick="startEdit(${i})" title="수정">✏️</button>
+        <button class="btn-del"  onclick="removeEntry(${i})" title="삭제">✕</button>
+      </div>`;
+    list.appendChild(el);
+  });
+
+  const totalMin = entries.reduce((s, e) => s + e.minutes, 0);
+  const isOver   = totalMin > 1440;
+  const isMax    = totalMin >= 1440;
+
+  document.getElementById('total-time').textContent     = fmt(totalMin);
+  document.getElementById('total-warn').style.display   = isOver ? 'block' : 'none';
+  bar.style.display = 'flex';
+
+  if (isMax) {
+    addBtn.disabled      = true;
+    addBtn.textContent   = '＋ 일일보고 추가 (24시간 도달)';
+    addBtn.style.background = '#8fcfb0';
+  } else {
+    addBtn.disabled      = false;
+    addBtn.textContent   = '＋ 일일보고 추가';
+    addBtn.style.background = '';
+  }
+
+  const hasUnsynced     = entries.some(e => !e.synced);
+  sub.style.display     = hasUnsynced ? 'block' : 'none';
+  sub.disabled          = isOver;
+  sub.style.background  = isOver ? '#93b4f5' : '';
+}
+
+// =========================================================
+//  토스트
+// =========================================================
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = `toast ${type}`;
+  setTimeout(() => { t.className = 'toast'; }, 3000);
+}
+</script>
+</body>
+</html>
