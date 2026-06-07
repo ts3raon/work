@@ -592,8 +592,28 @@ function computeStats(rows) {
     };
   }).sort((a,b)=>b.count_as_sub-a.count_as_sub).slice(0,10);
 
-  const deptStats = [...new Set(rows.map(r=>r.기술지원부서).filter(Boolean))].map(nm => {
-    const sub = rows.filter(r=>r.기술지원부서===nm);
+  // ── 팀명 병합 규칙 ───────────────────────────────────────
+  // 보안기술3팀 → 플랫폼기술2팀
+  // 보안기술1팀 → 플랫폼기술1팀
+  // 보안기술2팀 → AI기반기술팀
+  function normalizeDept(name) {
+    if (!name) return name;
+    const MAP = {
+      '보안기술3팀': '플랫폼기술2팀',
+      '보안기술1팀': '플랫폼기술1팀',
+      '보안기술2팀': 'AI기반기술팀',
+    };
+    return MAP[name] || name;
+  }
+
+  // 병합된 팀명으로 rows 재매핑
+  const mergedRows = rows.map(r => ({
+    ...r,
+    기술지원부서: normalizeDept(r.기술지원부서)
+  }));
+
+  const deptStats = [...new Set(mergedRows.map(r=>r.기술지원부서).filter(Boolean))].map(nm => {
+    const sub = mergedRows.filter(r=>r.기술지원부서===nm);
     return { name:nm, total:sub.length,
       construction: sub.filter(isCon).length,
       maintenance:  sub.filter(r=>r.계약구분==='유지보수').length,
@@ -611,7 +631,7 @@ function computeStats(rows) {
 // ── Sample data
 function loadSample() {
   const ITEMS=['TouchEn mTransKey','TouchEn mVaccine','TouchEn nxKey','OneGuard','OnePass','Key# Wireless','AppIron','TouchEn WiseAccess','OmniOne Enterprise'];
-  const DEPTS=['플랫폼기술2팀','보안기술3팀','AI기반기술팀','보안기술2팀','플랫폼기술1팀','서비스기술2팀','유지보수팀','보안기술1팀'];
+  const DEPTS=['플랫폼기술2팀','AI기반기술팀','플랫폼기술1팀','서비스기술2팀','유지보수팀'];
   const TECHJ=['김해성','장민경','송치영','조윤진','김경환','김주연','한정용'];
   const TECHB=['박우영','황재령','강영구','송치영'];
   const CATS=['유지보수','유지보수','유지보수','구축','ASP','서비스'];
