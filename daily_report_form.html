@@ -353,7 +353,7 @@
 // =========================================================
 // Google Cloud Console → API 및 서비스 → 사용자 인증 정보
 // → OAuth 2.0 클라이언트 ID → 웹 애플리케이션
-const GOOGLE_CLIENT_ID = '371926582033-tjn75tnp96qma0a12mc0loekn4qpqipt.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID_HERE';
 
 // =========================================================
 //  전역 상태
@@ -565,7 +565,7 @@ async function loadSheetData() {
   document.getElementById('auth-banner').textContent = '⏳ 데이터 로딩 중...';
 
   try {
-    const res  = await fetch(url + '?action=getData', { method:'GET', redirect:'follow' });
+    const res  = await fetch(url + '?action=getData', { method:'GET', redirect:'follow', cache:'no-cache' });
     const text = await res.text();
     const data = JSON.parse(text);
 
@@ -895,7 +895,9 @@ async function submitAll() {
     }));
 
     const res  = await fetch(url, {
-      method: 'POST', redirect: 'follow',
+      method: 'POST',
+      redirect: 'follow',
+      mode: 'cors',
       body: JSON.stringify({ action: 'appendRows', rows })
     });
     const json = await res.json();
