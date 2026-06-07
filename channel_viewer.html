@@ -95,6 +95,20 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .chip-items{background:var(--surface2);color:var(--text3);border:1px solid var(--border);}
 .empty-list{padding:32px 16px;text-align:center;color:var(--text3);font-size:13px;}
 
+/* ── 기간 상태 태그 ── */
+.chip-stat-진행예정{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;}
+.chip-stat-진행중  {background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;}
+.chip-stat-만료예정{background:#fee2e2;color:#dc2626;border:1px solid #fecaca;animation:blink 1.5s infinite;}
+.chip-stat-만료    {background:#f3f4f6;color:#6b7280;border:1px solid #e5e7eb;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.55;}}
+
+/* ── 만료예정 프로젝트 목록 강조 ── */
+.proj-item.status-만료예정{background:#fff5f5;border-left:3px solid #dc2626;}
+.proj-item.status-만료예정 .proj-name{color:#dc2626;}
+.proj-item.status-만료예정:hover{background:#fee2e2;}
+.proj-item.status-진행예정{background:#f0f7ff;border-left:3px solid #2563eb;}
+.proj-item.status-만료{opacity:.7;}
+
 /* ── Toggle filter buttons ── */
 .toggle-btn{
   flex:1;padding:6px 10px;font-family:'Noto Sans KR',sans-serif;font-size:11px;font-weight:600;
@@ -223,6 +237,13 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
           <select class="filter-sel" id="filterBuyer" onchange="filterList()">
             <option value="">수요처 전체</option>
           </select>
+          <select class="filter-sel" id="filterStatus" onchange="filterList()">
+            <option value="">상태 전체</option>
+            <option value="진행예정">📅 진행예정</option>
+            <option value="진행중">✅ 진행중</option>
+            <option value="만료예정">⚠️ 만료예정</option>
+            <option value="만료">🔒 만료</option>
+          </select>
         </div>
         <div style="margin-top:8px;display:flex;gap:7px;flex-wrap:wrap;">
           <button class="toggle-btn" id="btnSameOnly" onclick="toggleFilter('same')">
@@ -260,6 +281,32 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 let allProjects  = [];   // { code, name, channel, channelMgr, vendor, buyer, items:[] }
 let filteredProjs = [];
 let selectedCode  = null;
+
+// ── 기간 기반 상태 계산 ───────────────────────────────────────
+// 진행예정: 시작일이 오늘 이후
+// 진행중:   시작일 <= 오늘 <= 종료일
+// 만료예정: 종료일이 오늘~30일 이내
+// 만료:     종료일이 오늘 이전
+function computeStatus(project) {
+  const fromList = project.items.map(i=>i.from).filter(Boolean).sort();
+  const toList   = project.items.map(i=>i.to).filter(Boolean).sort();
+  const earliest = fromList[0];
+  const latest   = toList[toList.length - 1];
+
+  const now = new Date(); now.setHours(0,0,0,0);
+
+  if (latest) {
+    const endDate = new Date(latest); endDate.setHours(0,0,0,0);
+    const daysLeft = Math.ceil((endDate - now) / (1000*60*60*24));
+    if (daysLeft < 0)  return '만료';
+    if (daysLeft <= 30) return '만료예정';
+  }
+  if (earliest) {
+    const startDate = new Date(earliest); startDate.setHours(0,0,0,0);
+    if (startDate > now) return '진행예정';
+  }
+  return '진행중';
+}
 
 // ═══════════════════════════════════════
 //  Init
@@ -403,6 +450,9 @@ function parseData(raw) {
     return;
   }
 
+  // 기간 기반 상태 계산
+  allProjects.forEach(p => { p.computedStatus = computeStatus(p); });
+
   // 필터 옵션 구성
   buildFilters();
 
@@ -463,10 +513,12 @@ function filterList() {
   const q  = document.getElementById('searchInput').value.toLowerCase();
   const ch = document.getElementById('filterChannel').value;
   const by = document.getElementById('filterBuyer').value;
+  const fs = document.getElementById('filterStatus').value;
 
   filteredProjs = allProjects.filter(p => {
     if (ch && p.channel !== ch) return false;
     if (by && p.buyer   !== by) return false;
+    if (fs && p.computedStatus !== fs) return false;
     // 거래처=채널사 토글 필터
     const isSame = p.vendor && p.channel && p.vendor === p.channel;
     if (activeToggle === 'same' && !isSame) return false;
@@ -491,8 +543,10 @@ function renderList() {
   }
   list.innerHTML = filteredProjs.map(p => {
     const isSame = p.vendor && p.channel && p.vendor === p.channel;
+    const st     = p.computedStatus || '—';
+    const stIcon = {진행예정:'📅',진행중:'✅',만료예정:'⚠️',만료:'🔒'}[st] || '';
     return `
-    <div class="proj-item ${selectedCode===p.code?'active':''}" onclick="selectProject('${p.code}')">
+    <div class="proj-item ${selectedCode===p.code?'active':''} status-${st}" onclick="selectProject('${p.code}')">
       <div class="proj-code">${p.code}</div>
       <div class="proj-name">${p.name}</div>
       <div class="proj-meta">
@@ -501,6 +555,7 @@ function renderList() {
         ${isSame
           ? `<span class="meta-chip" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0">&#128257; 직접채널</span>`
           : `<span class="meta-chip" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a">&#8594; ${p.vendor||'거래처 미상'}</span>`}
+        <span class="meta-chip chip-stat-${st}">${stIcon} ${st}</span>
         ${p.items.length ? `<span class="meta-chip chip-items">품목 ${p.items.length}건</span>` : ''}
       </div>
     </div>`;
@@ -559,6 +614,19 @@ function selectProject(code) {
       <div class="detail-card">
         <div class="detail-card-label">&#128197; 프로젝트 기간</div>
         <div class="detail-card-val mono">${periodFrom} ~ ${periodTo}</div>
+      </div>
+      <div class="detail-card ${p.computedStatus==='만료예정'?'highlight':''}" style="${
+        p.computedStatus==='진행중'?'background:#f0fdf4;border-color:#bbf7d0':
+        p.computedStatus==='만료예정'?'background:#fee2e2;border-color:#fecaca':
+        p.computedStatus==='진행예정'?'background:#eff6ff;border-color:#bfdbfe':
+        'background:#f3f4f6'}">
+        <div class="detail-card-label">&#9989; 진행 상태</div>
+        <div class="detail-card-val" style="color:${
+          p.computedStatus==='진행중'?'#166534':
+          p.computedStatus==='만료예정'?'#dc2626':
+          p.computedStatus==='진행예정'?'#1d4ed8':'#6b7280'}">
+          ${{진행예정:'📅 진행예정',진행중:'✅ 진행중',만료예정:'⚠️ 만료예정',만료:'🔒 만료'}[p.computedStatus]||p.computedStatus}
+        </div>
       </div>
     </div>
 
