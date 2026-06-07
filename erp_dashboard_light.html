@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ERP 프로젝트 관리 대시보드</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#f4f6f9; --bg2:#ffffff; --bg3:#f0f2f6; --bg4:#e2e6ee;
+  --border:rgba(0,0,0,0.08); --border2:rgba(0,0,0,0.14);
+  --text1:#1a1e2e; --text2:#4a5068; --text3:#8892aa;
+  --accent:#2563eb; --accent2:#059669; --accent3:#d97706; --accent4:#dc2626; --accent5:#7c3aed;
+  --con:#2563eb; --main:#059669; --asp:#d97706; --svc:#7c3aed;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text1);min-height:100vh;font-size:14px;line-height:1.6}
+
+/* ── Header ── */
+.header{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:58px;position:sticky;top:0;z-index:200}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--accent5));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.logo-text{font-size:15px;font-weight:700;letter-spacing:-.3px}
+.logo-sub{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.header-right{display:flex;align-items:center;gap:12px}
+.header-meta{font-size:12px;color:var(--text3);font-family:'JetBrains Mono',monospace}
+.header-meta span{color:var(--accent2)}
+.upload-btn-hdr{display:flex;align-items:center;gap:6px;padding:6px 14px;border-radius:7px;border:1px solid var(--border2);background:var(--bg3);color:var(--text2);font-size:12px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;transition:all .18s;white-space:nowrap}
+.upload-btn-hdr:hover{background:var(--bg4);color:var(--text1);border-color:var(--accent)}
+.upload-btn-hdr.loaded{border-color:var(--accent2);color:var(--accent2);background:rgba(5,150,105,.1)}
+
+/* ── Upload Screen ── */
+.upload-screen{position:fixed;inset:0;background:var(--bg);z-index:300;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
+.upload-screen.hidden{display:none}
+.upload-box{border:2px dashed var(--border2);border-radius:20px;padding:52px 60px;text-align:center;max-width:500px;width:90%;transition:border-color .2s,background .2s;cursor:pointer}
+.upload-box.drag-over{border-color:var(--accent);background:rgba(37,99,235,.06)}
+.upload-icon-big{font-size:50px;margin-bottom:16px;line-height:1}
+.upload-title{font-size:20px;font-weight:700;margin-bottom:8px}
+.upload-desc{font-size:13px;color:var(--text3);line-height:1.9;margin-bottom:22px}
+.upload-cta{display:inline-flex;align-items:center;gap:8px;padding:11px 26px;border-radius:9px;background:var(--accent);color:#fff;font-size:14px;font-weight:600;cursor:pointer;border:none;font-family:'Noto Sans KR',sans-serif;transition:opacity .2s}
+.upload-cta:hover{opacity:.85}
+.upload-hint{font-size:11px;color:var(--text3);margin-top:13px}
+.upload-err{color:var(--accent4);font-size:13px;margin-top:11px;min-height:20px}
+.upload-loading{margin-top:14px;font-size:13px;color:var(--text2);display:none}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sample-link{margin-top:18px;font-size:12px;color:var(--text3)}
+.sample-link a{color:var(--accent);text-decoration:none;cursor:pointer}
+.sample-link a:hover{text-decoration:underline}
+
+/* ── Nav ── */
+.nav{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 28px;display:flex;gap:2px;overflow-x:auto}
+.nav::-webkit-scrollbar{height:0}
+.nav-tab{padding:11px 16px;font-size:13px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .18s;white-space:nowrap;background:none;border-top:none;border-left:none;border-right:none;font-family:'Noto Sans KR',sans-serif}
+.nav-tab:hover{color:var(--text2)}
+.nav-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* ── Pages ── */
+.main{padding:22px 28px}
+.page{display:none}
+.page.active{display:block;animation:fadeIn .22s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.sec-title{font-size:11px;font-weight:500;color:var(--text3);letter-spacing:1.5px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:14px}
+
+/* ── KPI ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:11px;margin-bottom:22px}
+.kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:15px 17px;position:relative;overflow:hidden;transition:border-color .18s}
+.kpi-card:hover{border-color:var(--border2)}
+.kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--kc,var(--accent));opacity:.85}
+.kpi-label{font-size:11px;color:var(--text3);margin-bottom:7px;font-weight:500}
+.kpi-value{font-size:24px;font-weight:700;color:var(--kc,var(--text1));font-family:'JetBrains Mono',monospace;letter-spacing:-1px;line-height:1}
+.kpi-sub{font-size:11px;color:var(--kc,var(--text3));margin-top:5px;font-weight:500}
+
+/* ── Cards ── */
+.chart-grid{display:grid;gap:14px;margin-bottom:14px}
+.col-2{grid-template-columns:1fr 1fr}
+.col-3-1{grid-template-columns:2fr 1fr}
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:19px 21px;transition:border-color .18s}
+.card:hover{border-color:var(--border2)}
+.card-title{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:14px;display:flex;align-items:center;gap:7px;letter-spacing:.3px}
+.card-title .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);flex-shrink:0}
+
+/* ── Legend ── */
+.legend-row{display:flex;flex-wrap:wrap;gap:13px;margin-bottom:11px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text3)}
+.legend-dot{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+
+/* ── Table ── */
+.table-scroll{overflow-y:auto;max-height:340px}
+.table-scroll::-webkit-scrollbar{width:3px}
+.table-scroll::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.data-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.data-table th{text-align:left;padding:7px 9px;color:var(--text3);font-size:11px;font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap;position:sticky;top:0;background:var(--bg2)}
+.data-table td{padding:8px 9px;border-bottom:1px solid var(--border);color:var(--text2)}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(0,0,0,.035);color:var(--text1)}
+.data-table td:first-child{color:var(--text1);font-weight:500}
+.num{text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px}
+.pct-bar-wrap{display:flex;align-items:center;gap:5px}
+.pct-bar-bg{flex:1;height:4px;background:var(--bg4);border-radius:2px;overflow:hidden;min-width:40px}
+.pct-bar-fill{height:100%;border-radius:2px;transition:width .5s}
+.pct-label{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;min-width:34px;text-align:right}
+
+/* ── Badges ── */
+.badge{display:inline-block;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;letter-spacing:.3px}
+.badge-con{background:rgba(37,99,235,.12);color:#2563eb}
+.badge-done{background:rgba(0,0,0,.07);color:var(--text3)}
+
+/* ── H-bars ── */
+.h-bar-row{display:flex;align-items:center;gap:9px;margin-bottom:9px}
+.h-bar-label{font-size:12px;color:var(--text2);min-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h-bar-track{flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden}
+.h-bar-fill{height:100%;border-radius:3px}
+.h-bar-val{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;min-width:30px;text-align:right}
+.rank-num{font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;min-width:16px}
+
+/* ── Stacked bars ── */
+.stacked-row{display:flex;align-items:center;gap:9px;margin-bottom:8px}
+.stacked-label{font-size:12px;color:var(--text2);min-width:108px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stacked-track{flex:1;height:17px;background:var(--bg4);border-radius:3px;overflow:hidden;display:flex}
+.stacked-seg{height:100%;transition:width .5s}
+.stacked-val{font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;min-width:32px;text-align:right}
+
+/* ── Split / Info ── */
+.split-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.split-card{background:var(--bg3);border-radius:8px;padding:14px 16px;border-left:3px solid var(--kc,var(--accent))}
+.split-card-label{font-size:11px;color:var(--text3);margin-bottom:4px}
+.split-card-val{font-size:23px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--kc,var(--text1))}
+.split-card-sub{font-size:11px;color:var(--text3);margin-top:4px}
+.donut-wrap{position:relative}
+.donut-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+.donut-center-val{font-size:21px;font-weight:700;font-family:'JetBrains Mono',monospace}
+.donut-center-label{font-size:10px;color:var(--text3)}
+.info-row{display:flex;align-items:baseline;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--border)}
+.info-row:last-child{border-bottom:none}
+.info-key{font-size:12px;color:var(--text3)}
+.info-val{font-size:13px;font-weight:600;font-family:'JetBrains Mono',monospace}
+.dual-bar{display:flex;align-items:center;gap:3px}
+.dual-seg{height:13px;border-radius:2px;min-width:2px}
+
+@media(max-width:1200px){.kpi-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:768px){.main{padding:14px}.kpi-grid{grid-template-columns:repeat(2,1fr)}.col-2,.col-3-1,.split-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- ══ Upload Screen ══ -->
+<div class="upload-screen" id="uploadScreen">
+  <div class="upload-box" id="dropZone">
+    <div class="upload-icon-big">📊</div>
+    <div class="upload-title">ERP 데이터 업로드</div>
+    <div class="upload-desc">
+      프로젝트관리 엑셀 파일을 여기에 끌어다 놓거나<br>
+      버튼을 클릭해서 파일을 선택하세요<br>
+      <span style="color:var(--accent2)">파일은 브라우저에서만 처리됩니다</span>
+    </div>
+    <button class="upload-cta" id="uploadCta">📂 파일 선택하기</button>
+    <div class="upload-hint">.xlsx · .xls 형식 지원</div>
+    <div class="upload-err" id="uploadErr"></div>
+    <div class="upload-loading" id="uploadLoading"><span class="spinner"></span>데이터 분석 중...</div>
+  </div>
+  <div class="sample-link">파일이 없으신가요? <a id="sampleBtn">샘플 데이터로 미리보기 →</a></div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls" style="display:none">
+</div>
+
+<!-- ══ Dashboard ══ -->
+<div id="dashboardWrap" style="display:none">
+
+<header class="header">
+  <div class="logo">
+    <div class="logo-icon">📊</div>
+    <div>
+      <div class="logo-text">프로젝트 관리 대시보드</div>
+      <div class="logo-sub">ERP · 기술지원 통계 분석</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="header-meta">총 <span id="headerTotal">—</span>건 · <span id="headerFile" style="color:var(--text3)">—</span></div>
+    <button class="upload-btn-hdr" id="reloadBtn">📂 다른 파일 업로드</button>
+  </div>
+</header>
+
+<nav class="nav">
+  <button class="nav-tab active" onclick="showPage('overview',this)">전체 요약</button>
+  <button class="nav-tab" onclick="showPage('category',this)">구축 vs 유지보수</button>
+  <button class="nav-tab" onclick="showPage('items',this)">품목별 통계</button>
+  <button class="nav-tab" onclick="showPage('tech',this)">기술지원 담당자</button>
+  <button class="nav-tab" onclick="showPage('dept',this)">기술지원부서별</button>
+</nav>
+
+<main class="main">
+
+  <!-- 전체 요약 -->
+  <div id="page-overview" class="page active">
+    <div class="sec-title">전체 현황 요약</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+    <div class="chart-grid col-3-1">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>계약구분별 비중</div>
+        <div class="legend-row" id="catLegend"></div>
+        <div style="position:relative;height:210px"><canvas id="overviewDonut" role="img" aria-label="계약구분 도넛"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent2)"></span>진행상태</div>
+        <div class="donut-wrap" style="height:160px">
+          <canvas id="statusDonut" role="img" aria-label="진행상태 도넛"></canvas>
+          <div class="donut-center">
+            <div class="donut-center-val" style="color:var(--accent2)" id="progressPct">—%</div>
+            <div class="donut-center-label">진행 중</div>
+          </div>
+        </div>
+        <div style="margin-top:10px" id="statusInfoRows"></div>
+      </div>
+    </div>
+    <div class="chart-grid col-2">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent3)"></span>기술지원부서별 건수 (상위 8)</div>
+        <div id="deptOverviewBars"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent5)"></span>품목별 건수 (상위 10)</div>
+        <div id="itemOverviewBars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 구축 vs 유지보수 -->
+  <div id="page-category" class="page">
+    <div class="sec-title">구축 vs 유지보수+정기점검 비교</div>
+    <div class="split-row" id="splitCards"></div>
+    <div class="chart-grid col-2">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>계약구분 상세 분류</div>
+        <div style="position:relative;height:240px"><canvas id="catBarChart" role="img" aria-label="계약구분별 건수"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent2)"></span>지원구분별 현황</div>
+        <div style="position:relative;height:240px"><canvas id="supportBarChart" role="img" aria-label="지원구분별 건수"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-grid col-2">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent3)"></span>계약구분상세 분류</div>
+        <div class="table-scroll"><table class="data-table"><thead><tr><th>계약구분상세</th><th class="num">건수</th><th>비율</th></tr></thead><tbody id="catDetailTable"></tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent5)"></span>부서별 구축/유지보수 분포</div>
+        <div id="deptStackBars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 품목별 -->
+  <div id="page-items" class="page">
+    <div class="sec-title">품목별 통계</div>
+    <div class="chart-grid col-2">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>품목별 프로젝트 건수 (상위 15) <span style="font-weight:400;color:var(--text3);font-size:11px">· 프로젝트코드 기준 중복제거</span></div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--con)"></div>구축</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--main)"></div>유지보수+ASP+서비스</div>
+        </div>
+        <div style="position:relative;height:360px"><canvas id="itemStackBar" role="img" aria-label="품목별 누적 막대"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent3)"></span>품목별 상세 통계 <span style="font-weight:400;color:var(--text3);font-size:11px">· 프로젝트코드 기준 중복제거</span></div>
+        <div class="table-scroll"><table class="data-table"><thead><tr><th>#</th><th>품목명</th><th class="num">전체</th><th class="num">구축</th><th class="num">유지보수</th><th>비율</th></tr></thead><tbody id="itemTableBody"></tbody></table></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 기술지원 담당자 -->
+  <div id="page-tech" class="page">
+    <div class="sec-title">기술지원 담당자 통계</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px;line-height:1.8">
+      <span style="background:rgba(79,142,247,.12);color:#7baaff;padding:2px 7px;border-radius:4px;font-size:10px;font-weight:600;margin-right:6px">카운팅 기준</span>
+      정기점검 → <strong style="color:var(--text2)">프로젝트코드 + 담당자</strong> 기준 1건 &nbsp;·&nbsp;
+      그 외 → <strong style="color:var(--text2)">프로젝트코드 + 품목명 + 담당자</strong> 기준 1건
+    </div>
+
+    <!-- 기술지원(정) KPI -->
+    <div class="kpi-grid" id="techJKpi" style="grid-template-columns:repeat(4,1fr);margin-bottom:16px"></div>
+
+    <!-- 기술지원(정) 차트 + 테이블 -->
+    <div style="font-size:11px;font-weight:600;color:var(--accent);letter-spacing:1px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin-bottom:10px">▎기술지원(정)</div>
+    <div class="chart-grid col-2">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>구축 vs 유지보수+정기점검 건수 (상위 12)</div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--con)"></div>구축</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--main)"></div>유지보수+정기점검</div>
+        </div>
+        <div style="position:relative;height:340px"><canvas id="techJBar" role="img" aria-label="기술지원(정) 건수 누적 막대"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent3)"></span>기술지원(정) 담당자별 상세</div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr>
+              <th>#</th><th>담당자</th>
+              <th class="num">전체</th>
+              <th class="num" style="color:var(--con)">구축</th>
+              <th class="num" style="color:var(--main)">유지보수+정기점검</th>
+              <th>구성비</th>
+            </tr></thead>
+            <tbody id="techJTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- 구축 전담 vs 유지보수 전담 분류 -->
+    <div class="chart-grid col-2" style="margin-top:0">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--con)"></span>구축 비중 높은 담당자 (구축 ≥ 50%)</div>
+        <div id="techJConList"></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--main)"></span>유지보수+정기점검 비중 높은 담당자</div>
+        <div id="techJMainList"></div>
+      </div>
+    </div>
+
+    <!-- 기술지원(부) -->
+    <div style="font-size:11px;font-weight:600;color:var(--accent4);letter-spacing:1px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;margin:16px 0 10px">▎기술지원(부)</div>
+    <div class="chart-grid col-2">
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent4)"></span>기술지원(부) 구축 vs 유지보수+정기점검 건수</div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--con)"></div>구축</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--main)"></div>유지보수+정기점검</div>
+        </div>
+        <div style="position:relative;height:240px"><canvas id="techBBar" role="img" aria-label="기술지원(부) 건수 막대"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent5)"></span>기술지원(부) 담당자별 상세</div>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead><tr>
+              <th>#</th><th>담당자</th>
+              <th class="num">부(전체)</th>
+              <th class="num" style="color:var(--con)">구축</th>
+              <th class="num" style="color:var(--main)">유지보수+</th>
+              <th class="num">정(겸임)</th>
+              <th>역할</th>
+            </tr></thead>
+            <tbody id="techBTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 부서별 -->
+  <div id="page-dept" class="page">
+    <div class="sec-title">기술지원부서별 통계</div>
+    <div class="chart-grid col-2">
+      <div class="card">
+        <div class="card-title"><span class="dot"></span>부서별 건수 — 계약구분 누적 분포</div>
+        <div class="legend-row">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--con)"></div>구축</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--main)"></div>유지보수</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--asp)"></div>ASP</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--svc)"></div>서비스</div>
+        </div>
+        <div style="position:relative;height:340px"><canvas id="deptStackChart" role="img" aria-label="부서별 계약구분 누적 막대"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot" style="background:var(--accent3)"></span>부서별 상세 통계</div>
+        <div class="table-scroll"><table class="data-table"><thead><tr><th>부서명</th><th class="num">전체</th><th class="num">구축</th><th class="num">유지보수</th><th class="num">ASP</th><th class="num">서비스</th><th>비율</th></tr></thead><tbody id="deptTableBody"></tbody></table></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="card-title"><span class="dot" style="background:var(--accent5)"></span>부서별 구축 vs 유지보수 비율 분포</div>
+      <div id="deptRatioBars"></div>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+// ── Colors & defaults
+const C = {
+  con:'#4f8ef7', main:'#6fd4a0', asp:'#f5a623', svc:'#a78bfa', red:'#e05c6e',
+  pal:['#4f8ef7','#6fd4a0','#f5a623','#a78bfa','#e05c6e','#38c9d4','#ff9f7f','#c4e4ff','#b8f0d0','#ffe4b3','#a3e5f7','#f7c6a3']
+};
+const TT = {backgroundColor:'#1e293b',titleColor:'#f1f5f9',bodyColor:'#94a3b8',borderColor:'rgba(255,255,255,0.08)',borderWidth:1};
+const GRID = {color:'rgba(255,255,255,0.04)'};
+const CHARTS = {};
+
+function mkChart(id, cfg) {
+  if (CHARTS[id]) CHARTS[id].destroy();
+  CHARTS[id] = new Chart(document.getElementById(id), cfg);
+}
+
+let D = null;
+
+// ── Upload wiring
+const uploadScreen  = document.getElementById('uploadScreen');
+const dashboardWrap = document.getElementById('dashboardWrap');
+const dropZone      = document.getElementById('dropZone');
+const fileInput     = document.getElementById('fileInput');
+const uploadErr     = document.getElementById('uploadErr');
+const uploadLoading = document.getElementById('uploadLoading');
+
+document.getElementById('uploadCta').onclick = () => fileInput.click();
+document.getElementById('reloadBtn').onclick = () => {
+  uploadScreen.classList.remove('hidden');
+  dashboardWrap.style.display = 'none';
+  uploadErr.textContent = '';
+  fileInput.value = '';
+};
+document.getElementById('sampleBtn').onclick = loadSample;
+
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => { if(e.target.files[0]) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls'].includes(ext)) {
+    uploadErr.textContent = '⚠ .xlsx 또는 .xls 파일만 지원합니다.'; return;
+  }
+  uploadErr.textContent = '';
+  uploadLoading.style.display = 'block';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+      const rows = parseERP(raw);
+      if (!rows) { uploadLoading.style.display='none'; return; }
+      D = computeStats(rows);
+      renderDashboard(file.name);
+      uploadLoading.style.display = 'none';
+      uploadScreen.classList.add('hidden');
+      dashboardWrap.style.display = 'block';
+    } catch(err) {
+      uploadLoading.style.display = 'none';
+      uploadErr.textContent = '⚠ 파싱 오류: ' + err.message;
+    }
+  };
+  reader.onerror = () => { uploadLoading.style.display='none'; uploadErr.textContent='⚠ 파일 읽기 실패'; };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── ERP Parser
+// Row 0 = main headers, Row 1 = sub-headers, Row 2+ = data
+// Known col positions in sample file (0-based):
+// 1=작성일자, 2=영업담당, 7=계약구분, 8=계약구분상세, 14=진행상태,
+// 18=거래처, 20=지원구분, 22=기술지원부서(1), 41=기술지원(정)담당자,
+// 43=기술지원(부)담당자, 46=품목명
+function parseERP(raw) {
+  if (raw.length < 3) { uploadErr.textContent='⚠ 데이터 행이 부족합니다.'; return null; }
+
+  const h0 = raw[0].map(v => String(v||'').trim());
+
+  // Flexible column detection
+  function fc(candidates) {
+    for (const c of candidates) {
+      const i = h0.findIndex(h => h === c || h.includes(c));
+      if (i >= 0) return i;
+    }
+    return -1;
+  }
+
+  const COL = {
+    프로젝트코드: fc(['프로젝트코드']) < 0 ? 12 : fc(['프로젝트코드']),
+    계약구분:     fc(['계약구분']) < 0 ? 7  : fc(['계약구분']),
+    계약구분상세: fc(['계약구분상세']) < 0 ? 8  : fc(['계약구분상세']),
+    진행상태:     fc(['진행상태']) < 0 ? 14 : fc(['진행상태']),
+    지원구분:     fc(['지원구분']) < 0 ? 20 : fc(['지원구분']),
+    기술지원부서: 22, // sub-col under '기술지원'
+    기술지원정:   fc(['기술지원(정)']) < 0 ? 41 : fc(['기술지원(정)']),
+    기술지원부:   fc(['기술지원(부)']) < 0 ? 43 : fc(['기술지원(부)']),
+    품목명:       fc(['품목명']) < 0 ? 46 : fc(['품목명']),
+    거래처:       fc(['거래처']) < 0 ? 18 : fc(['거래처']),
+  };
+
+  const rows = [];
+  for (let i = 2; i < raw.length; i++) {
+    const r = raw[i];
+    const cat = String(r[COL.계약구분]||'').trim();
+    if (!cat || cat === 'nan' || cat === '') continue;
+    rows.push({
+      프로젝트코드: String(r[COL.프로젝트코드]||'').trim(),
+      계약구분:     cat,
+      계약구분상세: String(r[COL.계약구분상세]||'').trim(),
+      진행상태:     String(r[COL.진행상태]||'').trim(),
+      지원구분:     String(r[COL.지원구분]||'').trim(),
+      기술지원부서: String(r[COL.기술지원부서]||'').trim(),
+      기술지원정:   String(r[COL.기술지원정]||'').trim(),
+      기술지원부:   String(r[COL.기술지원부]||'').trim(),
+      품목명:       String(r[COL.품목명]||'').trim(),
+      거래처:       String(r[COL.거래처]||'').trim(),
+    });
+  }
+
+  if (rows.length === 0) {
+    uploadErr.textContent = '⚠ 유효한 데이터가 없습니다. 컬럼 구조를 확인해 주세요.';
+    return null;
+  }
+  return rows;
+}
+
+// ── Stats computation
+function computeStats(rows) {
+  const total = rows.length;
+  const isCon  = r => r.계약구분 === '구축';
+  const isMain = r => ['유지보수','ASP','서비스'].includes(r.계약구분);
+
+  function groupCount(field, top=99) {
+    const m = {};
+    rows.forEach(r => { const v=r[field]; if(v) m[v]=(m[v]||0)+1; });
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,top);
+  }
+
+  const catMap = Object.fromEntries(groupCount('계약구분'));
+  const catDetail = groupCount('계약구분상세').map(([k,v])=>({name:k,val:v}));
+  const supMap = Object.fromEntries(groupCount('지원구분'));
+  const prog = rows.filter(r=>r.진행상태==='진행').length;
+  const done = rows.filter(r=>r.진행상태==='마감').length;
+
+  function mkStats(field, top=15) {
+    const names = [...new Set(rows.map(r=>r[field]).filter(Boolean))];
+    return names.map(nm => {
+      const sub = rows.filter(r=>r[field]===nm);
+      return { name:nm, total:sub.length, construction:sub.filter(isCon).length, maintenance:sub.filter(isMain).length };
+    }).sort((a,b)=>b.total-a.total).slice(0,top);
+  }
+
+  // 품목별: 프로젝트코드+품목명 기준 중복제거 (같은 프로젝트의 동일 품목은 1건으로 카운팅)
+  function mkItemStats(top=15) {
+    const seen = new Set();
+    const dedup = rows.filter(r => {
+      if (!r.품목명) return false;
+      const key = (r.프로젝트코드||'_') + '||' + r.품목명;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const names = [...new Set(dedup.map(r=>r.품목명))];
+    return names.map(nm => {
+      const sub = dedup.filter(r=>r.품목명===nm);
+      return { name:nm, total:sub.length, construction:sub.filter(isCon).length, maintenance:sub.filter(isMain).length };
+    }).sort((a,b)=>b.total-a.total).slice(0,top);
+  }
+
+  const itemStats = mkItemStats(15);
+
+  // 기술지원 담당자 중복제거 규칙:
+  //   정기점검(지원구분==='정기점검') → 프로젝트코드 + 담당자 기준 1건
+  //   그 외                          → 프로젝트코드 + 품목명 + 담당자 기준 1건
+  function dedupTech(techField) {
+    const seen = new Set();
+    return rows.filter(r => {
+      const person = r[techField];
+      if (!person) return false;
+      const key = r.지원구분 === '정기점검'
+        ? `${r.프로젝트코드}||__정기점검__||${person}`
+        : `${r.프로젝트코드}||${r.품목명}||${person}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }
+
+  const dedupJ = dedupTech('기술지원정');
+  const techJNames = [...new Set(dedupJ.map(r=>r.기술지원정))];
+  const techJStats = techJNames.map(nm => {
+    const sub = dedupJ.filter(r=>r.기술지원정===nm);
+    return { name:nm, total:sub.length, construction:sub.filter(isCon).length, maintenance:sub.filter(isMain).length };
+  }).sort((a,b)=>b.total-a.total).slice(0,12);
+
+  const dedupB = dedupTech('기술지원부');
+  const techBNames = [...new Set(dedupB.map(r=>r.기술지원부))];
+  const techBStats = techBNames.map(nm => {
+    const sub = dedupB.filter(r=>r.기술지원부===nm);
+    return {
+      name:         nm,
+      count_as_sub: sub.length,
+      construction: sub.filter(isCon).length,
+      maintenance:  sub.filter(isMain).length,
+      also_as_main: dedupJ.filter(r=>r.기술지원정===nm).length,
+    };
+  }).sort((a,b)=>b.count_as_sub-a.count_as_sub).slice(0,10);
+
+  const deptStats = [...new Set(rows.map(r=>r.기술지원부서).filter(Boolean))].map(nm => {
+    const sub = rows.filter(r=>r.기술지원부서===nm);
+    return { name:nm, total:sub.length,
+      construction: sub.filter(isCon).length,
+      maintenance:  sub.filter(r=>r.계약구분==='유지보수').length,
+      asp:          sub.filter(r=>r.계약구분==='ASP').length,
+      service:      sub.filter(r=>r.계약구분==='서비스').length,
+    };
+  }).sort((a,b)=>b.total-a.total).slice(0,12);
+
+  return { total, catMap, catDetail, supMap, prog, done,
+           conTotal: rows.filter(isCon).length,
+           mainTotal: rows.filter(isMain).length,
+           itemStats, techJStats, techBStats, deptStats };
+}
+
+// ── Sample data
+function loadSample() {
+  const ITEMS=['TouchEn mTransKey','TouchEn mVaccine','TouchEn nxKey','OneGuard','OnePass','Key# Wireless','AppIron','TouchEn WiseAccess','OmniOne Enterprise'];
+  const DEPTS=['플랫폼기술2팀','보안기술3팀','AI기반기술팀','보안기술2팀','플랫폼기술1팀','서비스기술2팀','유지보수팀','보안기술1팀'];
+  const TECHJ=['김해성','장민경','송치영','조윤진','김경환','김주연','한정용'];
+  const TECHB=['박우영','황재령','강영구','송치영'];
+  const CATS=['유지보수','유지보수','유지보수','구축','ASP','서비스'];
+  const SUPS=['정기점검','정기점검','정기점검','구축','유지보수'];
+  const rows=Array.from({length:800},()=>({
+    계약구분:     CATS[Math.floor(Math.random()*CATS.length)],
+    계약구분상세: ['(유/보)갱신','(구축)신규','(유/보)신규','ASP','(구축)추가및증설'][Math.floor(Math.random()*5)],
+    진행상태:     Math.random()<.4?'진행':'마감',
+    지원구분:     SUPS[Math.floor(Math.random()*SUPS.length)],
+    기술지원부서: DEPTS[Math.floor(Math.random()*DEPTS.length)],
+    기술지원정:   TECHJ[Math.floor(Math.random()*TECHJ.length)],
+    기술지원부:   Math.random()<.1?TECHB[Math.floor(Math.random()*TECHB.length)]:'',
+    품목명:       ITEMS[Math.floor(Math.random()*ITEMS.length)],
+    거래처:       '거래처'+Math.ceil(Math.random()*30),
+  }));
+  D = computeStats(rows);
+  renderDashboard('sample_data.xlsx');
+  uploadScreen.classList.add('hidden');
+  dashboardWrap.style.display = 'block';
+}
+
+// ── Helpers
+function pct(a,b){ return b?(a/b*100).toFixed(1):'0.0'; }
+
+function bar(val, max, color='var(--accent)') {
+  return `<div class="pct-bar-wrap"><div class="pct-bar-bg"><div class="pct-bar-fill" style="width:${pct(val,max)}%;background:${color}"></div></div><span class="pct-label">${pct(val,D.total)}%</span></div>`;
+}
+
+function hBars(id, items, maxVal, colorFn) {
+  document.getElementById(id).innerHTML = items.map((it,i)=>`
+    <div class="h-bar-row">
+      <div class="h-bar-label"><span class="rank-num">${i+1}.</span> ${it.name}</div>
+      <div class="h-bar-track"><div class="h-bar-fill" style="width:${pct(it.val||it.total,maxVal)}%;background:${colorFn?colorFn(i):C.pal[i%C.pal.length]}"></div></div>
+      <div class="h-bar-val">${(it.val||it.total).toLocaleString()}</div>
+    </div>`).join('');
+}
+
+function stackBars(id, items, maxVal) {
+  document.getElementById(id).innerHTML = items.map(it=>{
+    const t=it.con+it.main+(it.asp||0)+(it.svc||0);
+    const w=pct(t,maxVal);
+    const cw=t?pct(it.con,t):0, mw=t?pct(it.main,t):0, aw=t?pct(it.asp||0,t):0, sw=t?pct(it.svc||0,t):0;
+    return `<div class="stacked-row">
+      <div class="stacked-label">${it.name}</div>
+      <div class="stacked-track" style="max-width:${w}%">
+        <div class="stacked-seg" style="width:${cw}%;background:${C.con}"></div>
+        <div class="stacked-seg" style="width:${mw}%;background:${C.main}"></div>
+        <div class="stacked-seg" style="width:${aw}%;background:${C.asp}"></div>
+        <div class="stacked-seg" style="width:${sw}%;background:${C.svc}"></div>
+      </div>
+      <div class="stacked-val">${t.toLocaleString()}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Render
+function renderDashboard(fname) {
+  document.getElementById('headerTotal').textContent = D.total.toLocaleString();
+  document.getElementById('headerFile').textContent = fname;
+  document.querySelectorAll('.nav-tab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.querySelectorAll('.page').forEach((p,i)=>p.classList.toggle('active',i===0));
+  renderOverview(); renderCategory(); renderItems(); renderTech(); renderDept();
+}
+
+function renderOverview() {
+  const pp = pct(D.prog, D.total);
+  document.getElementById('progressPct').textContent = pp+'%';
+
+  document.getElementById('kpiGrid').innerHTML = [
+    {label:'전체 건수',         val:D.total.toLocaleString(),    sub:'등록 항목',                 kc:'#1a1e2e'},
+    {label:'구축',              val:D.conTotal.toLocaleString(), sub:`전체의 ${pct(D.conTotal,D.total)}%`, kc:C.con},
+    {label:'유지보수+ASP+서비스', val:D.mainTotal.toLocaleString(),sub:`전체의 ${pct(D.mainTotal,D.total)}%`,kc:C.main},
+    {label:'진행 중',           val:D.prog.toLocaleString(),     sub:`전체의 ${pp}%`,              kc:C.svc},
+    {label:'마감 완료',         val:D.done.toLocaleString(),     sub:`전체의 ${pct(D.done,D.total)}%`, kc:'#5a6278'},
+    {label:'품목 종류',         val:D.itemStats.length+'+종',    sub:'상위 15개 집계',              kc:C.asp},
+  ].map(k=>`<div class="kpi-card" style="--kc:${k.kc}"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+
+  const catL=Object.keys(D.catMap), catV=Object.values(D.catMap);
+  const catCol=catL.map(l=>l==='구축'?C.con:l==='유지보수'?C.main:l==='ASP'?C.asp:C.svc);
+  document.getElementById('catLegend').innerHTML=catL.map((l,i)=>`<div class="legend-item"><div class="legend-dot" style="background:${catCol[i]}"></div>${l} ${catV[i].toLocaleString()}</div>`).join('');
+  mkChart('overviewDonut',{type:'doughnut',data:{labels:catL,datasets:[{data:catV,backgroundColor:catCol,borderWidth:0,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',plugins:{legend:{display:false},tooltip:{...TT}}}});
+  mkChart('statusDonut',{type:'doughnut',data:{labels:['진행 중','마감 완료'],datasets:[{data:[D.prog,D.done],backgroundColor:[C.main,'#e2e6ee'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{display:false},tooltip:{...TT}}}});
+  document.getElementById('statusInfoRows').innerHTML=`<div class="info-row"><span class="info-key">진행 중</span><span class="info-val" style="color:${C.main}">${D.prog.toLocaleString()}</span></div><div class="info-row"><span class="info-key">마감 완료</span><span class="info-val" style="color:#5a6278">${D.done.toLocaleString()}</span></div>`;
+
+  hBars('deptOverviewBars', D.deptStats.slice(0,8).map(d=>({name:d.name,val:d.total})), D.deptStats[0]?.total||1, null);
+  hBars('itemOverviewBars', D.itemStats.slice(0,10).map(d=>({name:d.name,val:d.total})), D.itemStats[0]?.total||1, ()=>C.asp);
+}
+
+function renderCategory() {
+  document.getElementById('splitCards').innerHTML=`
+    <div class="split-card" style="--kc:${C.con}"><div class="split-card-label">🏗️ 구축</div><div class="split-card-val" style="color:${C.con}">${D.conTotal.toLocaleString()}건</div><div class="split-card-sub">전체의 ${pct(D.conTotal,D.total)}%</div></div>
+    <div class="split-card" style="--kc:${C.main}"><div class="split-card-label">🔧 유지보수 + ASP + 서비스</div><div class="split-card-val" style="color:${C.main}">${D.mainTotal.toLocaleString()}건</div><div class="split-card-sub">전체의 ${pct(D.mainTotal,D.total)}%</div></div>`;
+
+  const catL=Object.keys(D.catMap), catCol=catL.map(l=>l==='구축'?C.con:l==='유지보수'?C.main:l==='ASP'?C.asp:C.svc);
+  mkChart('catBarChart',{type:'bar',data:{labels:catL,datasets:[{data:Object.values(D.catMap),backgroundColor:catCol,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT}},scales:{x:{grid:GRID,ticks:{color:'#5a6278'}},y:{grid:GRID,ticks:{color:'#5a6278'}}}}});
+
+  const supL=Object.keys(D.supMap), supCol=supL.map(l=>l==='구축'?C.con:l==='정기점검'?C.main:l==='유지보수'?C.asp:C.svc);
+  mkChart('supportBarChart',{type:'bar',data:{labels:supL,datasets:[{data:Object.values(D.supMap),backgroundColor:supCol,borderRadius:5,borderSkipped:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{...TT}},scales:{x:{grid:GRID,ticks:{color:'#5a6278'}},y:{grid:GRID,ticks:{color:'#5a6278'}}}}});
+
+  const mxC=D.catDetail[0]?.val||1;
+  document.getElementById('catDetailTable').innerHTML=D.catDetail.map(d=>`<tr><td>${d.name}</td><td class="num">${d.val.toLocaleString()}</td><td>${bar(d.val,mxC)}</td></tr>`).join('');
+
+  stackBars('deptStackBars', D.deptStats.slice(0,10).map(d=>({name:d.name,con:d.construction,main:d.maintenance,asp:d.asp,svc:d.service})), D.deptStats[0]?.total||1);
+}
+
+function renderItems() {
+  const labels=D.itemStats.map(d=>d.name.length>18?d.name.slice(0,18)+'…':d.name);
+  mkChart('itemStackBar',{type:'bar',data:{labels,datasets:[{label:'구축',data:D.itemStats.map(d=>d.construction),backgroundColor:C.con,borderRadius:3},{label:'유지보수+',data:D.itemStats.map(d=>d.maintenance),backgroundColor:C.main,borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{...TT}},scales:{x:{stacked:true,grid:GRID,ticks:{color:'#5a6278'}},y:{stacked:true,grid:GRID,ticks:{color:'#5a6278',font:{size:11}}}}}});
+  const mx=D.itemStats[0]?.total||1;
+  document.getElementById('itemTableBody').innerHTML=D.itemStats.map((d,i)=>`<tr><td class="num">${i+1}</td><td>${d.name}</td><td class="num">${d.total.toLocaleString()}</td><td class="num" style="color:${C.con}">${d.construction}</td><td class="num" style="color:${C.main}">${d.maintenance.toLocaleString()}</td><td>${bar(d.total,mx)}</td></tr>`).join('');
+}
+
+function renderTech() {
+  const jStats = D.techJStats;
+  const totalJ = jStats.reduce((s,d)=>s+d.total,0);
+  const totalJCon  = jStats.reduce((s,d)=>s+d.construction,0);
+  const totalJMain = jStats.reduce((s,d)=>s+d.maintenance,0);
+  const activeTechJ = jStats.length;
+
+  // KPI 카드 (정 담당자 요약)
+  document.getElementById('techJKpi').innerHTML = [
+    {label:'기술지원(정) 담당자 수', val:activeTechJ+'명', sub:'집계 대상', kc:'#1a1e2e'},
+    {label:'전체 지원 건수',          val:totalJ.toLocaleString(), sub:'(정) 기준', kc:C.svc},
+    {label:'구축 지원 건수',          val:totalJCon.toLocaleString(), sub:`비중 ${pct(totalJCon,totalJ)}%`, kc:C.con},
+    {label:'유지보수+정기점검 건수',  val:totalJMain.toLocaleString(), sub:`비중 ${pct(totalJMain,totalJ)}%`, kc:C.main},
+  ].map(k=>`<div class="kpi-card" style="--kc:${k.kc}"><div class="kpi-label">${k.label}</div><div class="kpi-value">${k.val}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+
+  // 기술지원(정) 누적 가로 막대 차트
+  mkChart('techJBar',{
+    type:'bar',
+    data:{
+      labels: jStats.map(d=>d.name),
+      datasets:[
+        {label:'구축',            data:jStats.map(d=>d.construction), backgroundColor:C.con,  borderRadius:3},
+        {label:'유지보수+정기점검', data:jStats.map(d=>d.maintenance),  backgroundColor:C.main, borderRadius:3},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{legend:{display:false}, tooltip:{
+        ...TT,
+        callbacks:{
+          label: ctx => {
+            const d = jStats[ctx.dataIndex];
+            const val = ctx.raw;
+            const lbl = ctx.dataset.label;
+            return ` ${lbl}: ${val}건 (${pct(val,d.total)}%)`;
+          }
+        }
+      }},
+      scales:{
+        x:{stacked:true, grid:GRID, ticks:{color:'#5a6278'}},
+        y:{stacked:true, grid:GRID, ticks:{color:'#5a6278', font:{size:12}}}
+      }
+    }
+  });
+
+  // 기술지원(정) 상세 테이블
+  const mxJ = jStats[0]?.total||1;
+  document.getElementById('techJTableBody').innerHTML = jStats.map((d,i)=>{
+    const conPct = d.total ? (d.construction/d.total*100).toFixed(0) : 0;
+    const mainPct = d.total ? (d.maintenance/d.total*100).toFixed(0) : 0;
+    return `<tr>
+      <td class="num">${i+1}</td>
+      <td>${d.name}</td>
+      <td class="num">${d.total.toLocaleString()}</td>
+      <td class="num" style="color:${C.con}">${d.construction}</td>
+      <td class="num" style="color:${C.main}">${d.maintenance.toLocaleString()}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:4px">
+          <div style="flex:1;height:6px;background:var(--bg4);border-radius:3px;overflow:hidden;display:flex;min-width:60px">
+            <div style="width:${conPct}%;background:${C.con};height:100%"></div>
+            <div style="width:${mainPct}%;background:${C.main};height:100%"></div>
+          </div>
+          <span style="font-size:10px;color:var(--text3);font-family:'JetBrains Mono',monospace;min-width:28px">${conPct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // 구축 비중 높은 담당자 (구축 ≥ 50% 또는 구축 건수 상위)
+  const conFocused = jStats.filter(d=>d.total>0&&d.construction/d.total>=0.3).sort((a,b)=>b.construction-a.construction);
+  const mainFocused = jStats.filter(d=>d.total>0&&d.maintenance/d.total>0.7).sort((a,b)=>b.maintenance-a.maintenance);
+
+  function techPersonCard(d, highlightColor) {
+    const conW = d.total ? (d.construction/d.total*100).toFixed(1) : 0;
+    const mainW = d.total ? (d.maintenance/d.total*100).toFixed(1) : 0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <div style="width:28px;height:28px;border-radius:50%;background:${highlightColor}22;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:${highlightColor};flex-shrink:0">${d.name.slice(0,1)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--text1)">${d.name}</div>
+        <div style="display:flex;height:5px;border-radius:3px;overflow:hidden;margin-top:5px;background:var(--bg4)">
+          <div style="width:${conW}%;background:${C.con}"></div>
+          <div style="width:${mainW}%;background:${C.main}"></div>
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:13px;font-weight:700;font-family:'JetBrains Mono',monospace;color:${highlightColor}">${d.total}</div>
+        <div style="font-size:10px;color:var(--text3)">구축 ${d.construction} / 유지 ${d.maintenance}</div>
+      </div>
+    </div>`;
+  }
+
+  document.getElementById('techJConList').innerHTML = conFocused.length
+    ? conFocused.map(d=>techPersonCard(d,C.con)).join('')
+    : '<div style="font-size:13px;color:var(--text3);padding:16px 0">해당 담당자 없음</div>';
+
+  document.getElementById('techJMainList').innerHTML = mainFocused.length
+    ? mainFocused.map(d=>techPersonCard(d,C.main)).join('')
+    : '<div style="font-size:13px;color:var(--text3);padding:16px 0">해당 담당자 없음</div>';
+
+  // 기술지원(부) 누적 가로 막대 차트
+  const bStats = D.techBStats;
+  mkChart('techBBar',{
+    type:'bar',
+    data:{
+      labels: bStats.map(d=>d.name),
+      datasets:[
+        {label:'구축',            data:bStats.map(d=>d.construction), backgroundColor:C.con,  borderRadius:3},
+        {label:'유지보수+정기점검', data:bStats.map(d=>d.maintenance),  backgroundColor:C.main, borderRadius:3},
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{legend:{display:false}, tooltip:{
+        ...TT,
+        callbacks:{
+          label: ctx => {
+            const d = bStats[ctx.dataIndex];
+            return ` ${ctx.dataset.label}: ${ctx.raw}건 (${pct(ctx.raw,d.count_as_sub)}%)`;
+          }
+        }
+      }},
+      scales:{
+        x:{stacked:true, grid:GRID, ticks:{color:'#5a6278'}},
+        y:{stacked:true, grid:GRID, ticks:{color:'#5a6278'}}
+      }
+    }
+  });
+
+  // 기술지원(부) 상세 테이블
+  document.getElementById('techBTableBody').innerHTML = bStats.map((d,i)=>{
+    const dual = d.also_as_main > 0;
+    const conPct = d.count_as_sub ? (d.construction/d.count_as_sub*100).toFixed(0) : 0;
+    const mainPct = d.count_as_sub ? (d.maintenance/d.count_as_sub*100).toFixed(0) : 0;
+    return `<tr>
+      <td class="num">${i+1}</td>
+      <td>${d.name}</td>
+      <td class="num">${d.count_as_sub}</td>
+      <td class="num" style="color:${C.con}">${d.construction}</td>
+      <td class="num" style="color:${C.main}">${d.maintenance}</td>
+      <td class="num" style="color:${dual?C.con:'#5a6278'}">${d.also_as_main||'—'}</td>
+      <td>${dual?'<span class="badge badge-con">정+부 겸임</span>':'<span class="badge badge-done">부 전담</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderDept() {
+  mkChart('deptStackChart',{type:'bar',data:{labels:D.deptStats.map(d=>d.name),datasets:[{label:'구축',data:D.deptStats.map(d=>d.construction),backgroundColor:C.con,borderRadius:2},{label:'유지보수',data:D.deptStats.map(d=>d.maintenance),backgroundColor:C.main,borderRadius:2},{label:'ASP',data:D.deptStats.map(d=>d.asp),backgroundColor:C.asp,borderRadius:2},{label:'서비스',data:D.deptStats.map(d=>d.service),backgroundColor:C.svc,borderRadius:2}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false},tooltip:{...TT}},scales:{x:{stacked:true,grid:GRID,ticks:{color:'#5a6278'}},y:{stacked:true,grid:GRID,ticks:{color:'#5a6278',font:{size:11}}}}}});
+
+  const mxD=D.deptStats[0]?.total||1;
+  document.getElementById('deptTableBody').innerHTML=D.deptStats.map(d=>`<tr><td>${d.name}</td><td class="num">${d.total.toLocaleString()}</td><td class="num" style="color:${C.con}">${d.construction||'—'}</td><td class="num" style="color:${C.main}">${d.maintenance||'—'}</td><td class="num" style="color:${C.asp}">${d.asp||'—'}</td><td class="num" style="color:${C.svc}">${d.service||'—'}</td><td>${bar(d.total,mxD)}</td></tr>`).join('');
+
+  document.getElementById('deptRatioBars').innerHTML=D.deptStats.map(d=>{
+    const t=d.total, cp=t?pct(d.construction,t):0, mp=t?pct(d.maintenance,t):0, ap=t?pct(d.asp,t):0, sp=t?pct(d.service,t):0;
+    return `<div class="stacked-row"><div class="stacked-label">${d.name}</div><div class="stacked-track"><div class="stacked-seg" style="width:${cp}%;background:${C.con}" title="구축 ${cp}%"></div><div class="stacked-seg" style="width:${mp}%;background:${C.main}" title="유지보수 ${mp}%"></div><div class="stacked-seg" style="width:${ap}%;background:${C.asp}" title="ASP ${ap}%"></div><div class="stacked-seg" style="width:${sp}%;background:${C.svc}" title="서비스 ${sp}%"></div></div><div class="stacked-val">${t.toLocaleString()}</div></div>`;
+  }).join('');
+}
+
+function showPage(id, btn) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
