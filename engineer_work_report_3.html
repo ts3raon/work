@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>업무일지</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3450;
+    --accent:#4f8cff;--accent2:#7c5cfc;--green:#34d399;--yellow:#fbbf24;--red:#f87171;
+    --text:#e8eaf6;--text2:#8892b0;--text3:#4a5578;--radius:14px;--radius-sm:8px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:var(--bg);color:var(--text);font-family:'Noto Sans KR',sans-serif;min-height:100vh;padding-bottom:60px}
+  .header{background:linear-gradient(135deg,#1a1d27,#16192a);border-bottom:1px solid var(--border);padding:20px 20px 16px;position:sticky;top:0;z-index:10}
+  .header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .header-badge{font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);background:rgba(79,140,255,.12);border:1px solid rgba(79,140,255,.25);padding:3px 8px;border-radius:20px;letter-spacing:1px}
+  .header h1{font-size:18px;font-weight:700;letter-spacing:-.3px}
+  .header-date{font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;margin-top:2px}
+  .config-banner{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.25);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;cursor:pointer}
+  .config-banner.ok{background:rgba(52,211,153,.08);border-color:rgba(52,211,153,.3)}
+  .config-banner-icon{font-size:16px;flex-shrink:0}
+  .config-banner-title{font-size:12px;font-weight:600;color:var(--yellow)}
+  .config-banner.ok .config-banner-title{color:var(--green)}
+  .config-banner-sub{font-size:11px;color:var(--text3);margin-top:1px;font-family:'DM Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+  .modal-overlay.show{opacity:1;pointer-events:all}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius) var(--radius) 0 0;padding:24px 20px 40px;width:100%;max-width:480px;transform:translateY(40px);transition:transform .25s}
+  .modal-overlay.show .modal{transform:translateY(0)}
+  .modal h2{font-size:15px;font-weight:700;margin-bottom:6px}
+  .modal-desc{font-size:12px;color:var(--text3);margin-bottom:18px;line-height:1.7}
+  .modal-desc a{color:var(--accent)}
+  .modal-field{margin-bottom:12px}
+  .modal-field label{font-size:11px;color:var(--text3);font-weight:600;letter-spacing:.5px;display:block;margin-bottom:6px;text-transform:uppercase}
+  .modal-field input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;font-family:'DM Mono',monospace;padding:10px 12px;width:100%}
+  .modal-field input:focus{outline:none;border-color:var(--accent)}
+  .modal-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+  .btn-modal-cancel{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text2);font-size:14px;font-family:'Noto Sans KR',sans-serif;font-weight:600;padding:12px;cursor:pointer}
+  .btn-modal-save{background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;border-radius:var(--radius-sm);color:#fff;font-size:14px;font-family:'Noto Sans KR',sans-serif;font-weight:600;padding:12px;cursor:pointer}
+  .container{max-width:480px;margin:0 auto;padding:20px 16px}
+  .loading-chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)}
+  .spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+  .card-header{padding:12px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px}
+  .card-icon{width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0}
+  .card-icon.blue{background:rgba(79,140,255,.15)}
+  .card-icon.purple{background:rgba(124,92,252,.15)}
+  .card-icon.yellow{background:rgba(251,191,36,.15)}
+  .card-icon.green{background:rgba(52,211,153,.15)}
+  .card-icon.red{background:rgba(248,113,113,.15)}
+  .card-title{font-size:12px;font-weight:600;color:var(--text2);letter-spacing:.3px}
+  .card-body{padding:14px 16px}
+  .engineer-bar{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px}
+  .engineer-bar label{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;display:block;margin-bottom:8px}
+  input[type="date"],input[type="number"],input[type="text"],textarea,select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:14px;font-family:'Noto Sans KR',sans-serif;padding:10px 12px;width:100%;transition:border-color .15s}
+  input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
+  input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(.5);cursor:pointer}
+  select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238892b0' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center}
+  .field-group{display:flex;flex-direction:column;gap:6px}
+  .field-label{font-size:11px;color:var(--text3);font-weight:500;letter-spacing:.3px}
+  .datetime-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .project-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .proj-id-display{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;font-size:12px;font-family:'DM Mono',monospace;color:var(--text3);min-height:42px;display:flex;align-items:center}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:var(--surface2);border:1.5px solid var(--border);border-radius:20px;padding:7px 14px;font-size:13px;color:var(--text2);cursor:pointer;transition:all .15s;user-select:none;font-family:'Noto Sans KR',sans-serif;font-weight:500}
+  .chip:active{transform:scale(.96)}
+  .chip.active-blue{background:rgba(79,140,255,.15);border-color:var(--accent);color:var(--accent)}
+  .chip.active-yellow{background:rgba(251,191,36,.12);border-color:var(--yellow);color:var(--yellow)}
+  .chip.active-green{background:rgba(52,211,153,.12);border-color:var(--green);color:var(--green)}
+  .chip.active-red{background:rgba(248,113,113,.12);border-color:var(--red);color:var(--red)}
+  .stars{display:flex;gap:6px}
+  .star{font-size:26px;cursor:pointer;transition:transform .1s;line-height:1;filter:grayscale(1) opacity(.3)}
+  .star.active{filter:none}
+  .star:active{transform:scale(1.3)}
+  textarea{resize:none;height:80px;line-height:1.5}
+  .summary-bar{background:linear-gradient(135deg,rgba(79,140,255,.08),rgba(124,92,252,.08));border:1px solid rgba(79,140,255,.2);border-radius:var(--radius-sm);padding:10px 14px;display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap}
+  .summary-item{display:flex;flex-direction:column;gap:2px}
+  .summary-val{font-family:'DM Mono',monospace;font-size:15px;font-weight:500;color:var(--accent)}
+  .summary-key{font-size:10px;color:var(--text3);letter-spacing:.5px}
+  .record-list{display:flex;flex-direction:column;gap:8px}
+  .record-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;display:flex;align-items:flex-start;gap:10px;animation:slideIn .2s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
+  .record-type-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0}
+  .record-content{flex:1;min-width:0}
+  .record-main{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .record-proj{font-size:11px;color:var(--accent);font-family:'DM Mono',monospace;margin-top:1px}
+  .record-meta{font-size:11px;color:var(--text3);margin-top:2px;font-family:'DM Mono',monospace}
+  .record-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 2px;line-height:1;flex-shrink:0}
+  .record-del:active{color:var(--red)}
+  .empty-msg{text-align:center;color:var(--text3);font-size:13px;padding:20px 0}
+  .sync-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;margin-top:7px}
+  .sync-dot.synced{background:var(--green)}
+  .sync-dot.pending{background:var(--yellow)}
+  .sync-dot.error{background:var(--red)}
+  .btn-add{width:100%;background:linear-gradient(135deg,rgba(79,140,255,.15),rgba(124,92,252,.15));border:1.5px dashed rgba(79,140,255,.4);border-radius:var(--radius-sm);color:var(--accent);font-size:14px;font-family:'Noto Sans KR',sans-serif;font-weight:600;padding:12px;cursor:pointer;transition:all .15s;margin-top:10px}
+  .btn-add:active{opacity:.7;transform:scale(.98)}
+  .action-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+  .btn{border:none;border-radius:var(--radius-sm);font-size:14px;font-family:'Noto Sans KR',sans-serif;font-weight:600;padding:14px;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
+  .btn:active{transform:scale(.97)}
+  .btn-copy{background:var(--surface);border:1px solid var(--border);color:var(--text2)}
+  .btn-sync{background:linear-gradient(135deg,var(--green),#059669);color:#fff}
+  .btn-sync:disabled{opacity:.5;cursor:not-allowed}
+  .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(20px);background:#2a2d3e;border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:24px;font-size:13px;font-weight:500;opacity:0;transition:all .25s;white-space:nowrap;pointer-events:none;z-index:999}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-top">
+    <h1>&#128203; 업무일지</h1>
+    <span class="header-badge">SW ENGINEER</span>
+  </div>
+  <div class="header-date" id="headerDate"></div>
+</div>
+
+<div class="container">
+
+  <!-- Google Sheets 설정 배너 -->
+  <div class="config-banner" id="configBanner" onclick="openModal()">
+    <div class="config-banner-icon">&#128279;</div>
+    <div class="config-banner-text">
+      <div class="config-banner-title">Google Sheets 연동 필요</div>
+      <div class="config-banner-sub" id="configSub">Apps Script URL을 입력하세요 (탭하여 설정)</div>
+    </div>
+    <span style="color:var(--text3);font-size:18px;">&#8250;</span>
+  </div>
+
+  <!-- 담당 엔지니어 -->
+  <div class="engineer-bar">
+    <label>담당 엔지니어</label>
+    <input type="text" id="engineerName" placeholder="이름 입력 (예: 홍길동)" autocomplete="off">
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-bar" id="summaryBar" style="display:none">
+    <div class="summary-item"><span class="summary-val" id="sumCount">0</span><span class="summary-key">총 건수</span></div>
+    <div class="summary-item"><span class="summary-val" id="sumHours">0h</span><span class="summary-key">총 시간</span></div>
+    <div class="summary-item"><span class="summary-val" id="sumSync">-</span><span class="summary-key">동기화</span></div>
+  </div>
+
+  <!-- 날짜 & 작업시간 -->
+  <div class="card">
+    <div class="card-header"><div class="card-icon blue">&#128197;</div><span class="card-title">날짜 &amp; 작업시간</span></div>
+    <div class="card-body">
+      <div class="datetime-row">
+        <div class="field-group"><span class="field-label">날짜</span><input type="date" id="workDate"></div>
+        <div class="field-group"><span class="field-label">작업시간 (h)</span><input type="number" id="workHours" min="0.5" max="24" step="0.5" placeholder="예: 2.5"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 고객사 & 프로젝트 -->
+  <div class="card">
+    <div class="card-header"><div class="card-icon purple">&#127970;</div><span class="card-title">고객사 &amp; 프로젝트 (시트 A탭)</span></div>
+    <div class="card-body">
+      <div class="field-group">
+        <span class="field-label">고객사</span>
+        <select id="customerSelect" onchange="onCustomerChange()">
+          <option value="">-- 고객사 선택 --</option>
+        </select>
+      </div>
+      <div class="project-row">
+        <div class="field-group">
+          <span class="field-label">프로젝트명</span>
+          <select id="projectSelect" onchange="onProjectChange()">
+            <option value="">-- 프로젝트 선택 --</option>
+          </select>
+        </div>
+        <div class="field-group">
+          <span class="field-label">프로젝트 ID</span>
+          <div class="proj-id-display" id="projectIdDisplay">—</div>
+        </div>
+      </div>
+      <div id="sheetLoadStatus" style="margin-top:8px"></div>
+    </div>
+  </div>
+
+  <!-- 작업 유형 -->
+  <div class="card">
+    <div class="card-header"><div class="card-icon yellow">&#128295;</div><span class="card-title">작업 유형</span></div>
+    <div class="card-body">
+      <div class="chips">
+        <div class="chip active-blue" data-val="구축" onclick="selectChip(this)">&#128640; 구축</div>
+        <div class="chip" data-val="유지보수" onclick="selectChip(this)">&#128295; 유지보수</div>
+        <div class="chip" data-val="정기점검" onclick="selectChip(this)">&#9989; 정기점검</div>
+        <div class="chip" data-val="기술지원" onclick="selectChip(this)">&#128172; 기술지원</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 난이도 -->
+  <div class="card">
+    <div class="card-header"><div class="card-icon red">&#9889;</div><span class="card-title">난이도</span></div>
+    <div class="card-body">
+      <div class="stars" id="stars">
+        <span class="star" onclick="setStar(1)">&#11088;</span>
+        <span class="star" onclick="setStar(2)">&#11088;</span>
+        <span class="star" onclick="setStar(3)">&#11088;</span>
+        <span class="star" onclick="setStar(4)">&#11088;</span>
+        <span class="star" onclick="setStar(5)">&#11088;</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 메모 -->
+  <div class="card">
+    <div class="card-header"><div class="card-icon green">&#128221;</div><span class="card-title">특이사항 / 메모</span></div>
+    <div class="card-body"><textarea id="memo" placeholder="특이사항, 처리내용, 문제점 등 자유롭게 입력..."></textarea></div>
+  </div>
+
+  <button class="btn-add" onclick="addRecord()">+ 이 건 추가</button>
+
+  <!-- 업무 목록 -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-header"><div class="card-icon blue">&#128230;</div><span class="card-title">금일 업무 목록</span></div>
+    <div class="card-body" style="padding:12px 14px">
+      <div class="record-list" id="recordList"><div class="empty-msg">아직 추가된 업무가 없습니다</div></div>
+    </div>
+  </div>
+
+  <div class="action-row">
+    <button class="btn btn-copy" onclick="copyText()">&#128203; 텍스트 복사</button>
+    <button class="btn btn-sync" id="syncBtn" onclick="syncToSheet()">&#9729;&#65039; 시트에 저장</button>
+  </div>
+
+</div>
+
+<!-- 설정 모달 -->
+<div class="modal-overlay" id="modalOverlay" onclick="closeModalOutside(event)">
+  <div class="modal">
+    <h2>&#128279; Google Sheets 연동 설정</h2>
+    <p class="modal-desc">
+      아래 <strong>Apps Script 코드(.gs 파일)</strong>를 구글 시트에 등록하고<br>
+      배포 후 웹앱 URL을 입력하세요.<br><br>
+      시트 구조: <strong>A탭</strong> = 마스터 데이터 (고객사/프로젝트)<br>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<strong>B탭</strong> = 업무일지 저장소
+    </p>
+    <div class="modal-field">
+      <label>Apps Script 웹앱 URL</label>
+      <input type="text" id="scriptUrlInput" placeholder="https://script.google.com/macros/s/.../exec">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-modal-cancel" onclick="closeModal()">취소</button>
+      <button class="btn-modal-save" onclick="saveConfig()">저장 &amp; 불러오기</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'work_report_v3';
+let cfg = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+let records = [];
+let starVal = 0;
+let selectedChip = '구축';
+let sheetData = { engineers:[], projects:[] };
+
+// Init
+const today = new Date();
+document.getElementById('workDate').value = today.toISOString().split('T')[0];
+document.getElementById('headerDate').textContent =
+  today.toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'short'});
+
+if (cfg.scriptUrl) { updateBannerOk(cfg.scriptUrl); loadSheetData(); }
+
+// Modal
+function openModal(){
+  document.getElementById('scriptUrlInput').value = cfg.scriptUrl||'';
+  document.getElementById('modalOverlay').classList.add('show');
+}
+function closeModal(){ document.getElementById('modalOverlay').classList.remove('show'); }
+function closeModalOutside(e){ if(e.target.id==='modalOverlay') closeModal(); }
+
+function saveConfig(){
+  const url = document.getElementById('scriptUrlInput').value.trim();
+  if(!url.startsWith('https://script.google.com')){ showToast('올바른 Apps Script URL을 입력해주세요'); return; }
+  cfg.scriptUrl = url;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+  updateBannerOk(url);
+  closeModal();
+  loadSheetData();
+}
+function updateBannerOk(url){
+  const b = document.getElementById('configBanner');
+  b.classList.add('ok');
+  b.querySelector('.config-banner-title').textContent = 'Google Sheets 연동됨';
+  document.getElementById('configSub').textContent = '...'+url.slice(-40);
+}
+
+// Load sheet data
+async function loadSheetData(){
+  if(!cfg.scriptUrl) return;
+  setLoadStatus('<span class="loading-chip"><span class="spin"></span> 시트 데이터 불러오는 중...</span>');
+  try{
+    const res = await fetch(cfg.scriptUrl+'?action=getData');
+    const json = await res.json();
+    if(json.status!=='ok') throw new Error(json.message||'불러오기 실패');
+    sheetData = json.data;
+    populateCustomers(sheetData.projects||[]);
+    setLoadStatus('');
+    showToast('시트 데이터 로드 완료 ('+((sheetData.projects||[]).length)+'개 프로젝트)');
+  }catch(e){
+    setLoadStatus('<span style="color:var(--red);font-size:12px;">데이터 로드 실패: '+e.message+'</span>');
+  }
+}
+function setLoadStatus(html){ document.getElementById('sheetLoadStatus').innerHTML = html; }
+
+function populateCustomers(projects){
+  const customers = [...new Set(projects.map(p=>p.customer).filter(Boolean))];
+  const sel = document.getElementById('customerSelect');
+  sel.innerHTML = '<option value="">-- 고객사 선택 --</option>';
+  customers.forEach(c=>{ const o=document.createElement('option'); o.value=o.textContent=c; sel.appendChild(o); });
+}
+function onCustomerChange(){
+  const customer = document.getElementById('customerSelect').value;
+  const projSel = document.getElementById('projectSelect');
+  projSel.innerHTML = '<option value="">-- 프로젝트 선택 --</option>';
+  document.getElementById('projectIdDisplay').textContent = '—';
+  if(!customer) return;
+  sheetData.projects.filter(p=>p.customer===customer).forEach(p=>{
+    const o=document.createElement('option');
+    o.value=p.projectId; o.dataset.name=p.projectName; o.dataset.id=p.projectId;
+    o.textContent=p.projectName; projSel.appendChild(o);
+  });
+}
+function onProjectChange(){
+  const o = document.getElementById('projectSelect');
+  document.getElementById('projectIdDisplay').textContent = o.options[o.selectedIndex]?.dataset?.id||'—';
+}
+
+// Chip / Star
+const colorMap={'구축':'active-blue','유지보수':'active-yellow','정기점검':'active-green','기술지원':'active-red'};
+function selectChip(el){
+  document.querySelectorAll('.chip').forEach(c=>c.className='chip');
+  selectedChip=el.dataset.val;
+  el.classList.add(colorMap[selectedChip]||'active-blue');
+}
+document.querySelector('.chip').classList.add('active-blue');
+function setStar(val){
+  starVal=val;
+  document.querySelectorAll('.star').forEach((s,i)=>s.classList.toggle('active',i<val));
+}
+
+// Add record
+function addRecord(){
+  const date=document.getElementById('workDate').value;
+  const hours=document.getElementById('workHours').value;
+  const customer=document.getElementById('customerSelect').value;
+  const projSel=document.getElementById('projectSelect');
+  const projectId=projSel.value;
+  const projectName=projSel.options[projSel.selectedIndex]?.dataset?.name||'';
+  const memo=document.getElementById('memo').value.trim();
+  if(!customer){ showToast('고객사를 선택해주세요'); return; }
+  if(!hours){ showToast('작업시간을 입력해주세요'); return; }
+  records.push({id:Date.now(),date,hours:parseFloat(hours),customer,projectId,projectName,type:selectedChip,star:starVal,memo,syncStatus:'pending'});
+  renderList(); clearForm(); showToast('업무 추가됨');
+}
+function clearForm(){
+  document.getElementById('workHours').value='';
+  document.getElementById('customerSelect').value='';
+  document.getElementById('projectSelect').innerHTML='<option value="">-- 프로젝트 선택 --</option>';
+  document.getElementById('projectIdDisplay').textContent='—';
+  document.getElementById('memo').value='';
+  setStar(0);
+}
+function deleteRecord(id){ records=records.filter(r=>r.id!==id); renderList(); }
+
+// Render
+const typeColors={'구축':'#4f8cff','유지보수':'#fbbf24','정기점검':'#34d399','기술지원':'#f87171'};
+function renderList(){
+  const list=document.getElementById('recordList');
+  if(!records.length){ list.innerHTML='<div class="empty-msg">아직 추가된 업무가 없습니다</div>'; document.getElementById('summaryBar').style.display='none'; return; }
+  document.getElementById('summaryBar').style.display='flex';
+  const totalH=records.reduce((s,r)=>s+r.hours,0);
+  const synced=records.filter(r=>r.syncStatus==='synced').length;
+  document.getElementById('sumCount').textContent=records.length;
+  document.getElementById('sumHours').textContent=totalH+'h';
+  document.getElementById('sumSync').textContent=synced+'/'+records.length;
+  list.innerHTML=records.map(r=>`
+    <div class="record-item">
+      <span class="record-type-dot" style="background:${typeColors[r.type]||'#4f8cff'}"></span>
+      <div class="record-content">
+        <div class="record-main">${r.customer}</div>
+        ${r.projectId?`<div class="record-proj">[${r.projectId}] ${r.projectName}</div>`:''}
+        <div class="record-meta">${r.date} · ${r.hours}h · ${r.type}${r.star?' · '+'★'.repeat(r.star):''}${r.memo?' · '+r.memo.substring(0,18)+(r.memo.length>18?'…':''):''}</div>
+      </div>
+      <span class="sync-dot ${r.syncStatus}"></span>
+      <button class="record-del" onclick="deleteRecord(${r.id})">×</button>
+    </div>`).join('');
+}
+
+// Sync to sheet
+async function syncToSheet(){
+  if(!cfg.scriptUrl){ openModal(); return; }
+  const pending=records.filter(r=>r.syncStatus!=='synced');
+  if(!pending.length){ showToast('모두 동기화됨'); return; }
+  const engineer=document.getElementById('engineerName').value;
+  if(!engineer){ showToast('담당 엔지니어를 선택해주세요'); return; }
+  const btn=document.getElementById('syncBtn');
+  btn.disabled=true; btn.textContent='저장 중...';
+  const rows=pending.map(r=>({engineer,date:r.date,hours:r.hours,customer:r.customer,projectId:r.projectId,projectName:r.projectName,type:r.type,difficulty:r.star,memo:r.memo,submittedAt:new Date().toISOString()}));
+  try{
+    const res=await fetch(cfg.scriptUrl,{method:'POST',body:JSON.stringify({action:'appendRows',rows})});
+    const json=await res.json();
+    if(json.status!=='ok') throw new Error(json.message||'저장 실패');
+    pending.forEach(r=>r.syncStatus='synced');
+    renderList(); showToast(pending.length+'건 시트에 저장 완료!');
+  }catch(e){
+    pending.forEach(r=>r.syncStatus='error');
+    renderList(); showToast('저장 실패: '+e.message);
+  }finally{
+    btn.disabled=false; btn.textContent='시트에 저장';
+  }
+}
+
+// Copy
+function copyText(){
+  if(!records.length){ showToast('업무 내역이 없습니다'); return; }
+  const eng=document.getElementById('engineerName').value||'미입력';
+  let txt=`[업무일지] ${eng}\n${'─'.repeat(30)}\n`;
+  records.forEach((r,i)=>{
+    txt+=`\n${i+1}. ${r.customer} (${r.type})\n`;
+    if(r.projectId) txt+=`   [${r.projectId}] ${r.projectName}\n`;
+    txt+=`   ${r.date}  ${r.hours}h`;
+    if(r.star) txt+=`  ${'★'.repeat(r.star)}`;
+    if(r.memo) txt+=`\n   ${r.memo}`;
+    txt+='\n';
+  });
+  txt+=`\n${'─'.repeat(30)}\n총 ${records.length}건 / ${records.reduce((s,r)=>s+r.hours,0)}h`;
+  navigator.clipboard.writeText(txt).then(()=>showToast('클립보드에 복사됨')).catch(()=>prompt('복사하세요:',txt));
+}
+
+function showToast(msg){
+  const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2200);
+}
+</script>
+</body>
+</html>
