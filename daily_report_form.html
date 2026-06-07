@@ -756,10 +756,15 @@ function onClientChange() {
   const source   = window._filteredClients || allClients;
   const filtered = source.filter(r => r.client === client);
   projSel.innerHTML = '<option value="">프로젝트 선택</option>';
-  filtered.forEach((r, idx) => {
+  filtered.forEach(r => {
     const o = document.createElement('option');
-    o.value = r.project; o.textContent = r.project;
-    o.dataset.idx = allClients.indexOf(r);
+    o.value          = r.project;
+    o.textContent    = r.project;
+    // indexOf 대신 pjtCode를 직접 저장 → 참조 불일치 문제 방지
+    o.dataset.pjtCode  = r.pjtCode  || '';
+    o.dataset.workType = r.workType || '';
+    o.dataset.client   = r.client   || '';
+    o.dataset.project  = r.project  || '';
     projSel.appendChild(o);
   });
   projSel.disabled = false;
@@ -769,10 +774,17 @@ function onClientChange() {
 function onProjectChange() {
   const projSel = document.getElementById('project-select');
   const opt     = projSel.options[projSel.selectedIndex];
-  if (!opt || opt.dataset.idx === undefined) { setAutoDisplay('',''); selectedPjt = null; return; }
-  const row = allClients[parseInt(opt.dataset.idx)];
-  selectedPjt = row;
-  setAutoDisplay(row.pjtCode, row.workType);
+  // 값이 없거나 기본 옵션이면 초기화
+  if (!opt || !opt.value) { setAutoDisplay('', ''); selectedPjt = null; return; }
+
+  // dataset에서 직접 읽기 (allClients 인덱스 참조 불필요)
+  selectedPjt = {
+    client:   opt.dataset.client   || opt.value,
+    project:  opt.dataset.project  || opt.value,
+    pjtCode:  opt.dataset.pjtCode  || '',
+    workType: opt.dataset.workType || '',
+  };
+  setAutoDisplay(selectedPjt.pjtCode, selectedPjt.workType);
 }
 
 function setAutoDisplay(pjt, wt) {
