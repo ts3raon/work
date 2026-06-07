@@ -346,7 +346,7 @@
 <div class="toast" id="toast"></div>
 
 <!-- Google Identity Services -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoaded()"></script>
 <script>
 // =========================================================
 //  ★ 설정값 — 배포 전 반드시 수정하세요
@@ -412,23 +412,90 @@ function updateConfigPanel(url) {
 // =========================================================
 //  Google 로그인
 // =========================================================
-function googleLogin() {
-  if (typeof google === 'undefined') {
-    document.getElementById('login-err').textContent = 'Google 라이브러리 로딩 중입니다. 잠시 후 다시 시도해 주세요.';
-    document.getElementById('login-err').style.display = 'block';
-    return;
+let gsiLoaded = false;
+let gsiInitDone = false;
+
+function onGsiLoaded() {
+  gsiLoaded = true;
+  // 라이브러리 로드 완료 → 에러 메시지 제거
+  const errEl = document.getElementById('login-err');
+  if (errEl && errEl.textContent.includes('라이브러리')) {
+    errEl.style.display = 'none';
   }
+  // 세션 없을 때 자동 로그인 프롬프트 시도
+  if (!currentUser && GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE') {
+    initGsi();
+  }
+}
+
+function initGsi() {
+  if (gsiInitDone || typeof google === 'undefined') return;
+  gsiInitDone = true;
   google.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
     callback: onGoogleCallback,
     auto_select: false,
   });
+  google.accounts.id.prompt();
+}
+
+function waitGsi(callback, retries) {
+  retries = retries || 0;
+  if (typeof google !== 'undefined') {
+    callback();
+    return;
+  }
+  if (retries > 30) {
+    // 30번(3초) 재시도 후에도 안 되면 오류
+    const errEl = document.getElementById('login-err');
+    if (errEl) {
+      errEl.textContent = 'Google 라이브러리 로드에 실패했습니다. 페이지를 새로고침 해주세요.';
+      errEl.style.display = 'block';
+    }
+    return;
+  }
+  setTimeout(() => waitGsi(callback, retries + 1), 100);
+}
+
+function googleLogin() {
+  const errEl = document.getElementById('login-err');
+  if (typeof google === 'undefined') {
+    // 로딩 중 메시지 표시하고 로드 완료 기다림
+    if (errEl) {
+      errEl.textContent = '⏳ Google 라이브러리 로딩 중... 잠시만 기다려주세요.';
+      errEl.style.display = 'block';
+    }
+    waitGsi(() => {
+      if (errEl) errEl.style.display = 'none';
+      doGoogleLogin();
+    });
+    return;
+  }
+  doGoogleLogin();
+}
+
+function doGoogleLogin() {
+  gsiInitDone = false; // 재초기화 허용
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: onGoogleCallback,
+    auto_select: false,
+  });
+  // 먼저 One Tap 시도, 안 되면 버튼 렌더링
   google.accounts.id.prompt((notification) => {
     if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      google.accounts.id.renderButton(
-        document.querySelector('.btn-google'),
-        { theme:'outline', size:'large', text:'signin_with', locale:'ko' }
-      );
+      // One Tap 불가 → 버튼 직접 클릭 유도 (이미 클릭한 상태이므로 팝업 열기)
+      try {
+        // renderButton으로 교체
+        const btnEl = document.querySelector('.btn-google');
+        if (btnEl) {
+          google.accounts.id.renderButton(btnEl, {
+            theme: 'outline', size: 'large', text: 'signin_with', locale: 'ko', width: 280
+          });
+          // 렌더링된 버튼 자동 클릭
+          setTimeout(() => { const inner = btnEl.querySelector('div[role=button]'); if (inner) inner.click(); }, 200);
+        }
+      } catch(e) { console.error('renderButton 오류:', e); }
     }
   });
 }
@@ -528,9 +595,12 @@ window.addEventListener('load', () => {
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(LAST_ACTIVE_KEY);
   }
-  if (GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE' && typeof google !== 'undefined') {
-    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCallback });
-    google.accounts.id.prompt();
+  // GSI는 onGsiLoaded()에서 처리 — 여기서는 로드 여부만 체크
+  if (GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE') {
+    if (typeof google !== 'undefined') {
+      onGsiLoaded(); // 이미 로드됐으면 즉시 실행
+    }
+    // 아직 로드 중이면 onload="onGsiLoaded()" 콜백에서 자동 실행
   }
 });
 
@@ -865,19 +935,42 @@ function updateEntry() {
 
 function cancelEdit() { editingIdx = -1; clearForm(); renderEntries(); }
 
+// =========================================================
+//  POST → JSONP 방식 (CORS 우회)
+//  Apps Script doGet에 action=post&data=JSON&callback=fn 으로 전달
+// =========================================================
+function callScriptPost(url, payload) {
+  return callScriptJsonp(url, {
+    action:  'post',
+    data:    JSON.stringify(payload)
+  });
+}
+
 async function removeEntry(i) {
   const entry = entries[i];
+
   if (entry.synced) {
     const url = getScriptUrl();
     if (url) {
       try {
-        await fetch(url, {
-          method: 'POST', redirect: 'follow',
-          body: JSON.stringify({ ...entry, action: 'delete' })
+        showToast('🗑 삭제 중...', 'success');
+        const res = await callScriptPost(url, {
+          action:  'delete',
+          worker:  entry.worker,
+          email:   entry.email,
+          date:    entry.date,
+          client:  entry.client,
+          project: entry.project,
+          pjtCode: entry.pjtCode
         });
-      } catch(e) { console.error('삭제 요청 실패:', e); }
+        if (res.status !== 'ok') throw new Error(res.message);
+      } catch(e) {
+        showToast('⚠️ 서버 삭제 실패: ' + e.message, 'error');
+        // 서버 실패해도 로컬에서는 제거
+      }
     }
   }
+
   entries.splice(i, 1);
   if (editingIdx === i) { editingIdx = -1; clearForm(); }
   else if (editingIdx > i) editingIdx--;
@@ -886,7 +979,7 @@ async function removeEntry(i) {
 }
 
 // =========================================================
-//  등록 (B탭 동기화)
+//  등록 / 수정 동기화 (B탭)
 // =========================================================
 async function submitAll() {
   const unsynced = entries.filter(e => !e.synced);
@@ -902,38 +995,63 @@ async function submitAll() {
   document.getElementById('submit-text').style.display    = 'none';
   document.getElementById('submit-spinner').style.display = 'block';
 
+  let successCount = 0;
+  let failCount    = 0;
+
   try {
-    const rows = unsynced.map(r => ({
-      engineer:    r.worker,
-      email:       r.email,
-      date:        r.date,
-      hours:       r.minutes / 60,
-      customer:    r.client,
-      projectId:   r.pjtCode,
-      projectName: r.project,
-      workType:    r.workType,
-      type:        r.supportType,
-      workStyle:   r.workStyle,
-      difficulty:  r.difficulty || 0,
-      memo:        r.note,
-      submittedAt: new Date().toISOString(),
-      action:      r.isEdit ? 'update' : 'insert'
-    }));
+    for (const entry of unsynced) {
+      try {
+        const payload = {
+          action:      entry.isEdit ? 'update' : 'appendRows',
+          engineer:    entry.worker,
+          email:       entry.email,
+          date:        entry.date,
+          hours:       entry.minutes / 60,
+          customer:    entry.client,
+          projectId:   entry.pjtCode,
+          projectName: entry.project,
+          workType:    entry.workType,
+          type:        entry.supportType,
+          workStyle:   entry.workStyle,
+          memo:        entry.note,
+          submittedAt: new Date().toISOString()
+        };
 
-    const res  = await fetch(url, {
-      method: 'POST',
-      redirect: 'follow',
-      mode: 'cors',
-      body: JSON.stringify({ action: 'appendRows', rows })
-    });
-    const json = await res.json();
-    if (json.status !== 'ok') throw new Error(json.message || '저장 실패');
+        // update면 원본 정보도 포함 (서버에서 기존 행 찾아서 삭제 후 재삽입)
+        if (entry.isEdit && entry.originalEntry) {
+          payload.originalWorker  = entry.originalEntry.worker;
+          payload.originalDate    = entry.originalEntry.date;
+          payload.originalClient  = entry.originalEntry.client;
+          payload.originalProject = entry.originalEntry.project;
+        }
 
-    unsynced.forEach(e => { e.synced = true; e.isEdit = false; delete e.originalEntry; });
-    showToast(`✅ ${unsynced.length}건 등록 완료`, 'success');
+        // appendRows는 rows 배열로 감싸서 전달
+        const sendPayload = payload.action === 'appendRows'
+          ? { action: 'appendRows', rows: [payload] }
+          : payload;
+
+        const res = await callScriptPost(url, sendPayload);
+        if (res.status !== 'ok') throw new Error(res.message || '저장 실패');
+
+        entry.synced = true;
+        entry.isEdit = false;
+        delete entry.originalEntry;
+        successCount++;
+        renderEntries(); // 실시간으로 ✓ 등록됨 표시 업데이트
+
+      } catch(e) {
+        console.error('항목 저장 실패:', e);
+        failCount++;
+      }
+    }
+
+    if (failCount === 0) {
+      showToast('✅ ' + successCount + '건 등록 완료', 'success');
+    } else {
+      showToast('⚠️ ' + successCount + '건 성공 / ' + failCount + '건 실패', 'error');
+    }
     renderEntries();
-  } catch(e) {
-    showToast('❌ 등록 실패: ' + e.message, 'error');
+
   } finally {
     btn.disabled = false;
     document.getElementById('submit-text').style.display    = 'block';
