@@ -489,6 +489,10 @@ function callJsonp(url, params) {
 // ═══════════════════════════════════════
 //  구글 시트 A탭 동기화
 // ═══════════════════════════════════════
+// ── 단일 행 전송 (URL 길이 제한 우회) ──────────────────────
+// JSONP는 URL 길이 제한(~2000자)이 있어 JSON 묶음 전송 불가.
+// 전략: 먼저 "초기화+헤더" 요청을 1번 보내고,
+//       이후 각 행을 개별 파라미터(flat)로 분리 전송.
 async function syncToSheet() {
   if (!parsedProjects.length) { showToast('먼저 엑셀 파일을 업로드해주세요', 'err'); return; }
   const url = document.getElementById('scriptUrl').value.trim();
@@ -496,52 +500,51 @@ async function syncToSheet() {
 
   const btn = document.getElementById('syncBtn');
   btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> 동기화 중...';
+  btn.innerHTML = '<span class="spin"></span> 초기화 중...';
   hideErr('syncErr');
   document.getElementById('syncProgress').classList.add('show');
   document.getElementById('syncDone').classList.remove('show');
   document.getElementById('panel-result').style.display = 'none';
   setStep(3);
 
-  // 청크 단위로 전송 (URL 길이 제한 대응, 50건씩)
-  const CHUNK = 50;
-  const chunks = [];
-  for (let i = 0; i < parsedProjects.length; i += CHUNK) {
-    chunks.push(parsedProjects.slice(i, i + CHUNK));
-  }
-
   let successCount = 0;
   let errorCount   = 0;
   const resultRows = [];
 
   try {
-    for (let ci = 0; ci < chunks.length; ci++) {
-      const chunk   = chunks[ci];
-      const pct     = Math.round(((ci) / chunks.length) * 100);
-      const progTxt = `동기화 중... ${ci * CHUNK + 1}–${Math.min((ci+1)*CHUNK, parsedProjects.length)} / ${parsedProjects.length}건`;
-      document.getElementById('syncProgressText').textContent = progTxt;
-      document.getElementById('syncProgressBar').style.width  = pct + '%';
+    // ① 시트 초기화 + 헤더 작성 (데이터 없이)
+    const initRes = await callJsonp(url, {
+      action:  'syncMaster',
+      mode:    'init',
+      h0: '고객사명', h1: '프로젝트ID', h2: '프로젝트명', h3: '업무유형'
+    });
+    if (initRes.status !== 'ok') throw new Error('초기화 실패: ' + (initRes.message || ''));
+
+    // ② 각 행을 개별 flat 파라미터로 전송
+    btn.innerHTML = '<span class="spin"></span> 동기화 중...';
+    for (let i = 0; i < parsedProjects.length; i++) {
+      const p   = parsedProjects[i];
+      const pct = Math.round((i / parsedProjects.length) * 100);
+      document.getElementById('syncProgressText').textContent =
+        `동기화 중... ${i + 1} / ${parsedProjects.length}건 (${pct}%)`;
+      document.getElementById('syncProgressBar').style.width = pct + '%';
 
       try {
         const res = await callJsonp(url, {
           action: 'syncMaster',
-          data:   JSON.stringify({
-            action:  'syncMaster',
-            headers: SHEET_HEADERS,
-            rows:    chunk,
-            isFirst: ci === 0,         // 첫 청크: 기존 데이터 초기화
-            isLast:  ci === chunks.length - 1
-          })
+          mode:   'row',
+          c0: p['고객사명']   || '',
+          c1: p['프로젝트ID'] || '',
+          c2: p['프로젝트명'] || '',
+          c3: p['업무유형']   || ''
         });
-
-        if (res.status !== 'ok') throw new Error(res.message || '서버 오류');
-        successCount += res.saved || chunk.length;
-        (res.rows || chunk).forEach(r => resultRows.push({...r, _status:'ok'}));
-
+        if (res.status !== 'ok') throw new Error(res.message || '행 저장 실패');
+        successCount++;
+        resultRows.push({...p, _status:'ok'});
       } catch(e) {
-        errorCount += chunk.length;
-        chunk.forEach(r => resultRows.push({...r, _status:'err', _err: e.message}));
-        console.error('청크 오류:', e);
+        errorCount++;
+        resultRows.push({...p, _status:'err', _err: e.message});
+        console.warn(`[${i}] 행 실패:`, e.message);
       }
     }
 
@@ -551,10 +554,9 @@ async function syncToSheet() {
       document.getElementById('syncDone').classList.add('show');
       showToast(successCount + '건 동기화 완료!', 'ok');
     } else {
-      showErr('syncErr', `${successCount}건 성공 / ${errorCount}건 실패. 콘솔 확인 후 재시도해주세요.`);
+      showErr('syncErr', successCount + '건 성공 / ' + errorCount + '건 실패');
       showToast('일부 항목 실패', 'err');
     }
-
     renderResult(resultRows, successCount, errorCount);
 
   } catch(e) {
