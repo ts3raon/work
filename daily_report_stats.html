@@ -447,7 +447,22 @@ async function loadData() {
     const res = await callJsonp(url, { action: 'getStats' });
     if (res.status !== 'ok') throw new Error(res.message || '오류');
 
-    rawData = res.data.rows || [];
+    rawData = (res.data.rows || []).map(r => ({
+      ...r,
+      // 날짜 정규화: 'yyyy-MM-dd' 앞 10자만 사용
+      date:  String(r.date  || '').substring(0, 10),
+      // hours 숫자 보장
+      hours: parseFloat(r.hours) || 0,
+      // 빈 문자열 방어
+      engineer:    String(r.engineer    || '').trim(),
+      customer:    String(r.customer    || '').trim(),
+      projectName: String(r.projectName || '').trim(),
+      supportType: String(r.supportType || '').trim(),
+      workStyle:   String(r.workStyle   || '').trim(),
+    }));
+
+    console.log('[Stats] 로드된 rawData 샘플:', rawData.slice(0,3));
+    console.log('[Stats] 총', rawData.length, '건 / 날짜 예시:', rawData[0]?.date, '/ 시간 예시:', rawData[0]?.hours);
 
     // 필터 옵션 구성
     buildFilterOptions();
@@ -527,13 +542,15 @@ function getFilterParams() {
 function applyFilter() {
   const p = getFilterParams();
   filtered = rawData.filter(r => {
-    if (p.from && r.date < p.from) return false;
-    if (p.to   && r.date > p.to)   return false;
-    if (p.engineer && r.engineer !== p.engineer) return false;
-    if (p.customer && r.customer !== p.customer) return false;
-    if (p.support  && r.supportType !== p.support) return false;
+    const d = String(r.date || '').substring(0, 10);
+    if (p.from && d < p.from) return false;
+    if (p.to   && d > p.to)   return false;
+    if (p.engineer && r.engineer    !== p.engineer) return false;
+    if (p.customer && r.customer    !== p.customer) return false;
+    if (p.support  && r.supportType !== p.support)  return false;
     return true;
   });
+  console.log('[Stats] 필터 결과:', filtered.length, '건 / 기간:', p.from, '~', p.to);
   renderAll();
 }
 
