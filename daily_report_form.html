@@ -553,6 +553,36 @@ async function loadMainContent() {
   await loadSheetData();
 }
 
+// ── JSONP 방식으로 CORS 우회 ──────────────────────────────
+function callScriptJsonp(url, params) {
+  return new Promise((resolve, reject) => {
+    const cbName = '_jsonpCb_' + Date.now() + '_' + Math.floor(Math.random()*10000);
+    const timeout = setTimeout(() => {
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      reject(new Error('요청 시간 초과 (10초)'));
+    }, 10000);
+
+    window[cbName] = function(data) {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      resolve(data);
+    };
+
+    const qs = Object.entries({ ...params, callback: cbName })
+      .map(([k,v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v)).join('&');
+    const script = document.createElement('script');
+    script.src = url + '?' + qs;
+    script.onerror = () => {
+      clearTimeout(timeout);
+      delete window[cbName];
+      reject(new Error('스크립트 로드 실패 — URL을 확인해주세요'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
 async function loadSheetData() {
   const url = getScriptUrl();
   if (!url) {
@@ -565,13 +595,10 @@ async function loadSheetData() {
   document.getElementById('auth-banner').textContent = '⏳ 데이터 로딩 중...';
 
   try {
-    const res  = await fetch(url + '?action=getData', { method:'GET', redirect:'follow', cache:'no-cache' });
-    const text = await res.text();
-    const data = JSON.parse(text);
+    const data = await callScriptJsonp(url, { action: 'getData' });
 
     if (data.status !== 'ok') throw new Error(data.message || '알 수 없는 오류');
 
-    // A탭 프로젝트 목록을 allClients 형식으로 변환
     allClients = (data.data.projects || []).map(p => ({
       client:   p.customer,
       project:  p.projectName,
@@ -579,7 +606,6 @@ async function loadSheetData() {
       workType: p.workType || '-'
     }));
 
-    // 당일 본인 데이터 복원
     const todayRows = (data.data.todayRows || []).filter(r =>
       r.worker === currentUser.name || r.email === currentUser.email
     );
@@ -591,8 +617,8 @@ async function loadSheetData() {
     document.getElementById('auth-banner').style.display = 'none';
 
     const msg = todayRows.length > 0
-      ? `📋 오늘 등록된 업무 ${todayRows.length}건 로드됨`
-      : `✅ 데이터 로드 완료 (프로젝트 ${allClients.length}건)`;
+      ? '📋 오늘 등록된 업무 ' + todayRows.length + '건 로드됨'
+      : '✅ 데이터 로드 완료 (프로젝트 ' + allClients.length + '건)';
     showToast(msg, 'success');
 
   } catch(e) {
