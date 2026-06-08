@@ -346,7 +346,7 @@
 <div class="toast" id="toast"></div>
 
 <!-- Google Identity Services -->
-<script src="https://accounts.google.com/gsi/client" async defer onload="onGsiLoaded()"></script>
+<!-- GSI 라이브러리는 JS에서 동적 로드 --></script>
 <script>
 // =========================================================
 //  ★ 설정값 — 배포 전 반드시 수정하세요
@@ -412,90 +412,84 @@ function updateConfigPanel(url) {
 // =========================================================
 //  Google 로그인
 // =========================================================
-let gsiLoaded = false;
-let gsiInitDone = false;
+// ── GSI 동적 로드 (모바일 대응) ─────────────────────────────
+// async defer + onload 조합이 모바일에서 불안정하여
+// 버튼 클릭 시점에 직접 스크립트를 주입하는 방식으로 변경
+let gsiLoaded    = false;
+let gsiLoading   = false;
+let gsiCallbacks = [];  // 로드 완료 후 실행할 콜백 큐
 
-function onGsiLoaded() {
-  gsiLoaded = true;
-  // 라이브러리 로드 완료 → 에러 메시지 제거
-  const errEl = document.getElementById('login-err');
-  if (errEl && errEl.textContent.includes('라이브러리')) {
-    errEl.style.display = 'none';
+function loadGsi(callback) {
+  // 이미 로드됨
+  if (typeof google !== 'undefined' && google.accounts) {
+    callback(); return;
   }
-  // 세션 없을 때 자동 로그인 프롬프트 시도
-  if (!currentUser && GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE') {
-    initGsi();
-  }
-}
+  // 콜백 큐에 추가
+  if (callback) gsiCallbacks.push(callback);
+  // 이미 로딩 중이면 큐에만 추가하고 대기
+  if (gsiLoading) return;
+  gsiLoading = true;
 
-function initGsi() {
-  if (gsiInitDone || typeof google === 'undefined') return;
-  gsiInitDone = true;
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: onGoogleCallback,
-    auto_select: false,
-  });
-  google.accounts.id.prompt();
-}
-
-function waitGsi(callback, retries) {
-  retries = retries || 0;
-  if (typeof google !== 'undefined') {
-    callback();
-    return;
-  }
-  if (retries > 30) {
-    // 30번(3초) 재시도 후에도 안 되면 오류
+  const s = document.createElement('script');
+  s.src = 'https://accounts.google.com/gsi/client';
+  s.async = true;
+  s.onload = () => {
+    gsiLoaded = true;
+    gsiLoading = false;
+    console.log('[GSI] 라이브러리 로드 완료');
+    // 큐에 있는 콜백 전부 실행
+    gsiCallbacks.forEach(cb => { try { cb(); } catch(e) {} });
+    gsiCallbacks = [];
+  };
+  s.onerror = () => {
+    gsiLoading = false;
+    gsiCallbacks = [];
     const errEl = document.getElementById('login-err');
     if (errEl) {
-      errEl.textContent = 'Google 라이브러리 로드에 실패했습니다. 페이지를 새로고침 해주세요.';
+      errEl.textContent = '❌ Google 라이브러리 로드 실패. 네트워크를 확인하고 새로고침 해주세요.';
       errEl.style.display = 'block';
     }
-    return;
-  }
-  setTimeout(() => waitGsi(callback, retries + 1), 100);
+  };
+  document.head.appendChild(s);
+  console.log('[GSI] 라이브러리 로드 시작...');
 }
 
 function googleLogin() {
   const errEl = document.getElementById('login-err');
-  if (typeof google === 'undefined') {
-    // 로딩 중 메시지 표시하고 로드 완료 기다림
-    if (errEl) {
-      errEl.textContent = '⏳ Google 라이브러리 로딩 중... 잠시만 기다려주세요.';
-      errEl.style.display = 'block';
-    }
-    waitGsi(() => {
-      if (errEl) errEl.style.display = 'none';
-      doGoogleLogin();
-    });
-    return;
+  if (errEl) {
+    errEl.textContent = '⏳ Google 로그인 준비 중...';
+    errEl.style.display = 'block';
   }
-  doGoogleLogin();
+  loadGsi(() => {
+    if (errEl) errEl.style.display = 'none';
+    doGoogleLogin();
+  });
 }
 
 function doGoogleLogin() {
-  gsiInitDone = false; // 재초기화 허용
   google.accounts.id.initialize({
     client_id: GOOGLE_CLIENT_ID,
     callback: onGoogleCallback,
     auto_select: false,
+    cancel_on_tap_outside: false,
   });
-  // 먼저 One Tap 시도, 안 되면 버튼 렌더링
-  google.accounts.id.prompt((notification) => {
+  google.accounts.id.prompt(notification => {
     if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      // One Tap 불가 → 버튼 직접 클릭 유도 (이미 클릭한 상태이므로 팝업 열기)
+      // One Tap 불가 → renderButton으로 대체
       try {
-        // renderButton으로 교체
         const btnEl = document.querySelector('.btn-google');
         if (btnEl) {
+          btnEl.innerHTML = '';
           google.accounts.id.renderButton(btnEl, {
-            theme: 'outline', size: 'large', text: 'signin_with', locale: 'ko', width: 280
+            theme: 'outline', size: 'large',
+            text: 'signin_with', locale: 'ko', width: 280
           });
-          // 렌더링된 버튼 자동 클릭
-          setTimeout(() => { const inner = btnEl.querySelector('div[role=button]'); if (inner) inner.click(); }, 200);
+          setTimeout(() => {
+            const inner = btnEl.querySelector('div[role=button]');
+            if (inner) inner.click();
+          }, 300);
         }
-      } catch(e) { console.error('renderButton 오류:', e); }
+      } catch(e) { console.error('[GSI] renderButton 오류:', e); }
     }
   });
 }
@@ -595,12 +589,23 @@ window.addEventListener('load', () => {
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(LAST_ACTIVE_KEY);
   }
-  // GSI는 onGsiLoaded()에서 처리 — 여기서는 로드 여부만 체크
+  // GSI 라이브러리는 버튼 클릭 시 동적 로드됨 (loadGsi 함수)
+  // 페이지 로드 시 미리 로드해 두면 버튼 클릭 응답이 더 빠름
   if (GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE') {
-    if (typeof google !== 'undefined') {
-      onGsiLoaded(); // 이미 로드됐으면 즉시 실행
-    }
-    // 아직 로드 중이면 onload="onGsiLoaded()" 콜백에서 자동 실행
+    loadGsi(() => {
+      // 세션 없는 상태에서 로드 완료되면 One Tap 조용히 시도
+      if (!currentUser) {
+        try {
+          google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: onGoogleCallback,
+            auto_select: true,
+            cancel_on_tap_outside: true,
+          });
+          google.accounts.id.prompt();
+        } catch(e) {}
+      }
+    });
   }
 });
 
