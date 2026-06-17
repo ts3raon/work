@@ -30,31 +30,11 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 .app-title{font-size:15px;font-weight:700;letter-spacing:-.3px;}
 .app-sub{font-size:11px;color:var(--text3);margin-top:1px;}
 
-/* ── Config bar ── */
-.config-bar{
-  background:#fffbeb;border-bottom:1px solid #fde68a;
-  padding:10px 24px;display:flex;align-items:center;gap:10px;
-}
-.config-bar.ok{background:#f0fdf4;border-color:#bbf7d0;}
-.config-bar label{font-size:12px;font-weight:600;color:#92400e;white-space:nowrap;}
-.config-bar.ok label{color:#14532d;}
-.config-bar input{
-  flex:1;max-width:480px;padding:6px 10px;font-size:12px;
-  font-family:'DM Mono',monospace;background:#fff;
-  border:1px solid #d1d5db;border-radius:6px;outline:none;color:#374151;
-}
-.config-bar input:focus{border-color:var(--accent);}
 .btn-sm{
   padding:6px 14px;font-family:'Noto Sans KR',sans-serif;font-size:12px;
   font-weight:600;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;
   transition:all .15s;
 }
-.btn-load{background:var(--accent);color:#fff;}
-.btn-load:hover{background:#0b7d45;}
-.btn-load:disabled{background:#8fcfb0;cursor:not-allowed;}
-.load-status{font-size:12px;color:var(--text3);white-space:nowrap;}
-.load-status.ok{color:var(--success);}
-.load-status.err{color:var(--danger);}
 
 /* ── Main layout ── */
 .main{max-width:1200px;margin:0 auto;padding:24px 20px;}
@@ -184,13 +164,6 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
   <div style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;" id="last-updated"></div>
 </div>
 
-<!-- Config bar -->
-<div class="config-bar" id="config-bar">
-  <label>&#9881; Apps Script URL</label>
-  <input type="text" id="script-url" placeholder="https://script.google.com/macros/s/.../exec">
-  <button class="btn-sm btn-load" id="btn-load" onclick="loadData()">데이터 불러오기</button>
-  <span class="load-status" id="load-status">URL 입력 후 불러오기를 클릭하세요</span>
-</div>
 
 <!-- Main -->
 <div class="main" id="main" style="display:none">
@@ -372,7 +345,8 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
 // ═══════════════════════════════════════════════
 //  State
 // ═══════════════════════════════════════════════
-const SCRIPT_URL_KEY = 'daily_report_script_url';
+// ★ Apps Script 배포 URL (고정)
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEeRVequ_N0rD5h3Txu7n22vvAHopIIdi0t1m3JGJsGBdCvXlPLO5SMTNLKT0B_i_WEw/exec';
 let rawData    = [];   // B탭 전체 행
 let filtered   = [];   // 필터 적용된 행
 let trendUnit  = 'day';
@@ -385,11 +359,6 @@ let charts     = {};
 //  Init
 // ═══════════════════════════════════════════════
 window.addEventListener('load', () => {
-  const saved = localStorage.getItem(SCRIPT_URL_KEY) || '';
-  if (saved) {
-    document.getElementById('script-url').value = saved;
-    document.getElementById('config-bar').classList.add('ok');
-  }
   initPeriod();
 });
 
@@ -432,16 +401,8 @@ function callJsonp(url, params) {
 //  데이터 로드
 // ═══════════════════════════════════════════════
 async function loadData() {
-  const url = document.getElementById('script-url').value.trim();
-  if (!url) { showToast('URL을 입력해주세요', 'err'); return; }
-  localStorage.setItem(SCRIPT_URL_KEY, url);
+  const url = APPS_SCRIPT_URL;
 
-  const btn = document.getElementById('btn-load');
-  const st  = document.getElementById('load-status');
-  btn.disabled  = true;
-  btn.textContent = '로딩 중...';
-  st.className  = 'load-status';
-  st.textContent = '⏳ 데이터 불러오는 중...';
 
   try {
     const res = await callJsonp(url, { action: 'getStats' });
@@ -469,21 +430,14 @@ async function loadData() {
     applyFilter();
 
     document.getElementById('main').style.display = 'block';
-    document.getElementById('config-bar').classList.add('ok');
     document.getElementById('last-updated').textContent =
       '마지막 업데이트: ' + new Date().toLocaleTimeString('ko-KR');
 
-    st.className  = 'load-status ok';
-    st.textContent = '✅ ' + rawData.length + '건 로드 완료';
     showToast(rawData.length + '건 데이터 로드 완료', 'ok');
 
   } catch(e) {
-    st.className  = 'load-status err';
-    st.textContent = '❌ ' + e.message;
     showToast('로드 실패: ' + e.message, 'err');
   } finally {
-    btn.disabled    = false;
-    btn.textContent = '데이터 불러오기';
   }
 }
 
