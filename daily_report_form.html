@@ -157,25 +157,6 @@
   #login-screen{display:none;}
   #main-content{display:none;}
 
-  /* Apps Script URL 설정 패널 */
-  .config-panel{
-    max-width:560px;margin:0 auto 16px;padding:14px 16px;
-    background:#fffbeb;border:1px solid #fbbf24;border-radius:10px;
-  }
-  .config-panel.ok{background:#ebfbee;border-color:#6ee7b7;}
-  .config-panel-title{font-size:12px;font-weight:600;color:#92400e;margin-bottom:8px;}
-  .config-panel.ok .config-panel-title{color:#065f46;}
-  .config-panel-row{display:flex;gap:8px;}
-  .config-panel input{
-    flex:1;padding:7px 10px;font-size:12px;font-family:'DM Mono','Courier New',monospace;
-    background:#fff;border:1px solid #d1d5db;border-radius:6px;color:#374151;outline:none;
-  }
-  .config-panel input:focus{border-color:var(--border-focus);}
-  .config-panel-btn{
-    padding:7px 14px;font-family:'Noto Sans KR',sans-serif;font-size:12px;font-weight:600;
-    background:var(--accent);color:#fff;border:none;border-radius:6px;cursor:pointer;white-space:nowrap;
-  }
-  .config-panel-btn:hover{background:#0b7d45;}
 </style>
 </head>
 <body>
@@ -199,15 +180,6 @@
 
 <!-- 메인 -->
 <div id="main-content">
-
-  <!-- Apps Script URL 설정 패널 -->
-  <div class="config-panel" id="config-panel">
-    <div class="config-panel-title" id="config-panel-title">&#9881;&#65039; Apps Script URL 설정 (최초 1회)</div>
-    <div class="config-panel-row">
-      <input type="text" id="script-url-input" placeholder="https://script.google.com/macros/s/.../exec">
-      <button class="config-panel-btn" onclick="saveScriptUrl()">저장</button>
-    </div>
-  </div>
 
   <!-- 사용자 배너 -->
   <div class="auth-banner ok" id="user-banner" style="display:none">
@@ -365,8 +337,10 @@ let editingIdx   = -1;
 let inputMode    = 'select';
 let selectedPjt  = null;
 
+// ★ Apps Script 배포 URL (고정)
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyEeRVequ_N0rD5h3Txu7n22vvAHopIIdi0t1m3JGJsGBdCvXlPLO5SMTNLKT0B_i_WEw/exec';
+
 const SESSION_KEY     = 'daily_report_user_v2';
-const SCRIPT_URL_KEY  = 'daily_report_script_url';
 const SESSION_TIMEOUT = 10 * 60 * 1000; // 10분
 const LAST_ACTIVE_KEY = 'daily_report_last_active';
 let   inactiveTimer   = null;
@@ -379,119 +353,167 @@ const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,
 document.getElementById('today-date').textContent =
   `${today.getFullYear()}.${String(today.getMonth()+1).padStart(2,'0')}.${String(today.getDate()).padStart(2,'0')} (${['일','월','화','수','목','금','토'][today.getDay()]})`;
 
-// =========================================================
-//  Apps Script URL 설정 패널
-// =========================================================
-function getScriptUrl() {
-  return localStorage.getItem(SCRIPT_URL_KEY) || '';
-}
-
-function saveScriptUrl() {
-  const url = document.getElementById('script-url-input').value.trim();
-  if (!url.startsWith('https://script.google.com')) {
-    showToast('올바른 Apps Script URL을 입력해주세요', 'error'); return;
-  }
-  localStorage.setItem(SCRIPT_URL_KEY, url);
-  updateConfigPanel(url);
-  showToast('URL이 저장되었습니다. 데이터를 다시 불러옵니다.', 'success');
-  if (currentUser) loadSheetData();
-}
-
-function updateConfigPanel(url) {
-  const panel = document.getElementById('config-panel');
-  if (url) {
-    panel.classList.add('ok');
-    document.getElementById('config-panel-title').textContent = '연결됨: ' + url.replace('https://script.google.com/macros/s/','').substring(0,36) + '...';
-    document.getElementById('script-url-input').value = url;
-  } else {
-    panel.classList.remove('ok');
-    document.getElementById('config-panel-title').textContent = 'Apps Script URL 설정 (최초 1회)';
-  }
 }
 
 // =========================================================
 //  Google 로그인
 // =========================================================
-// ── GSI 동적 로드 (모바일 대응) ─────────────────────────────
-// async defer + onload 조합이 모바일에서 불안정하여
-// 버튼 클릭 시점에 직접 스크립트를 주입하는 방식으로 변경
-let gsiLoaded    = false;
-let gsiLoading   = false;
-let gsiCallbacks = [];  // 로드 완료 후 실행할 콜백 큐
+// ── Google 로그인 (GSI + OAuth 팝업 듀얼 방식) ───────────────
+// GSI One Tap / renderButton 이 모바일에서 불안정한 경우
+// Google OAuth 팝업 방식(oauth2)으로 자동 폴백
+let gsiReady   = false;
+let gsiPending = null; // 로드 완료 후 실행할 콜백
 
+// ① GSI 스크립트 로드
 function loadGsi(callback) {
-  // 이미 로드됨
-  if (typeof google !== 'undefined' && google.accounts) {
-    callback(); return;
-  }
-  // 콜백 큐에 추가
-  if (callback) gsiCallbacks.push(callback);
-  // 이미 로딩 중이면 큐에만 추가하고 대기
-  if (gsiLoading) return;
-  gsiLoading = true;
+  gsiPending = callback;
 
+  if (typeof google !== 'undefined' && typeof google.accounts !== 'undefined') {
+    // 이미 로드됨
+    gsiReady = true;
+    if (gsiPending) { const cb = gsiPending; gsiPending = null; cb(); }
+    return;
+  }
+
+  // 스크립트 주입 (중복 방지)
+  if (document.querySelector('script[data-gsi]')) return;
   const s = document.createElement('script');
   s.src = 'https://accounts.google.com/gsi/client';
-  s.async = true;
-  s.onload = () => {
-    gsiLoaded = true;
-    gsiLoading = false;
-    console.log('[GSI] 라이브러리 로드 완료');
-    // 큐에 있는 콜백 전부 실행
-    gsiCallbacks.forEach(cb => { try { cb(); } catch(e) {} });
-    gsiCallbacks = [];
-  };
-  s.onerror = () => {
-    gsiLoading = false;
-    gsiCallbacks = [];
-    const errEl = document.getElementById('login-err');
-    if (errEl) {
-      errEl.textContent = '❌ Google 라이브러리 로드 실패. 네트워크를 확인하고 새로고침 해주세요.';
-      errEl.style.display = 'block';
-    }
-  };
+  s.setAttribute('data-gsi', '1');
+  s.onload  = _onGsiReady;
+  s.onerror = _onGsiFail;
   document.head.appendChild(s);
-  console.log('[GSI] 라이브러리 로드 시작...');
 }
 
+function _onGsiReady() {
+  // onload 후에도 google.accounts.id 초기화가 비동기이므로 짧게 대기
+  let tick = 0;
+  const t = setInterval(() => {
+    tick++;
+    if (typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+      clearInterval(t);
+      gsiReady = true;
+      console.log('[GSI] 준비 완료');
+      if (gsiPending) { const cb = gsiPending; gsiPending = null; cb(); }
+    } else if (tick > 30) { // 3초 대기 후 포기 → OAuth 팝업으로 폴백
+      clearInterval(t);
+      console.warn('[GSI] accounts.id 초기화 실패 → OAuth 팝업 폴백');
+      _oauthPopupLogin();
+    }
+  }, 100);
+}
+
+function _onGsiFail() {
+  console.warn('[GSI] 스크립트 로드 실패 → OAuth 팝업 폴백');
+  _oauthPopupLogin();
+}
+
+// ② GSI One Tap / renderButton 시도
 function googleLogin() {
   const errEl = document.getElementById('login-err');
-  if (errEl) {
-    errEl.textContent = '⏳ Google 로그인 준비 중...';
-    errEl.style.display = 'block';
-  }
-  loadGsi(() => {
-    if (errEl) errEl.style.display = 'none';
+  const btn   = document.querySelector('.btn-google');
+  if (errEl) { errEl.style.display = 'none'; }
+  if (btn)   { btn.style.opacity = '.6'; btn.style.pointerEvents = 'none'; }
+
+  if (gsiReady && typeof google !== 'undefined' && google.accounts && google.accounts.id) {
+    if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
     doGoogleLogin();
-  });
+  } else {
+    gsiPending = () => {
+      if (btn) { btn.style.opacity = ''; btn.style.pointerEvents = ''; }
+      doGoogleLogin();
+    };
+    loadGsi(null); // gsiPending 이미 설정됨
+  }
 }
 
 function doGoogleLogin() {
-  google.accounts.id.initialize({
-    client_id: GOOGLE_CLIENT_ID,
-    callback: onGoogleCallback,
-    auto_select: false,
-    cancel_on_tap_outside: false,
+  try {
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: onGoogleCallback,
+      auto_select: false,
+      cancel_on_tap_outside: false,
+      use_fedcm_for_prompt: false,
+    });
+    google.accounts.id.prompt(n => {
+      const reason = n.isNotDisplayed() ? n.getNotDisplayedReason()
+                   : n.isSkippedMoment() ? n.getSkippedReason() : '';
+      console.log('[GSI] prompt 결과:', n.getMomentType(), reason);
+      if (n.isNotDisplayed() || n.isSkippedMoment()) {
+        // renderButton 시도, 실패 시 OAuth 팝업
+        _tryRenderButton();
+      }
+    });
+  } catch(e) {
+    console.error('[GSI] initialize 오류:', e);
+    _tryRenderButton();
+  }
+}
+
+function _tryRenderButton() {
+  try {
+    const btnEl = document.querySelector('.btn-google');
+    if (!btnEl) { _oauthPopupLogin(); return; }
+    btnEl.innerHTML = '';
+    google.accounts.id.renderButton(btnEl, {
+      theme: 'outline', size: 'large', text: 'signin_with', locale: 'ko', width: 280
+    });
+    setTimeout(() => {
+      const inner = btnEl.querySelector('div[role=button], iframe');
+      if (inner) inner.click();
+      else       _oauthPopupLogin(); // renderButton도 실패 → OAuth 팝업
+    }, 400);
+  } catch(e) {
+    console.error('[GSI] renderButton 실패:', e);
+    _oauthPopupLogin();
+  }
+}
+
+// ③ 최종 폴백: Google OAuth 팝업 (GSI 없이 동작)
+function _oauthPopupLogin() {
+  console.log('[GSI] OAuth 팝업 방식으로 로그인 시도');
+  const params = new URLSearchParams({
+    client_id:     GOOGLE_CLIENT_ID,
+    redirect_uri:  window.location.origin + window.location.pathname,
+    response_type: 'token id_token',
+    scope:         'openid email profile',
+    nonce:         Math.random().toString(36).slice(2),
+    prompt:        'select_account',
   });
-  google.accounts.id.prompt(notification => {
-    if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
-      // One Tap 불가 → renderButton으로 대체
-      try {
-        const btnEl = document.querySelector('.btn-google');
-        if (btnEl) {
-          btnEl.innerHTML = '';
-          google.accounts.id.renderButton(btnEl, {
-            theme: 'outline', size: 'large',
-            text: 'signin_with', locale: 'ko', width: 280
-          });
-          setTimeout(() => {
-            const inner = btnEl.querySelector('div[role=button]');
-            if (inner) inner.click();
-          }, 300);
-        }
-      } catch(e) { console.error('[GSI] renderButton 오류:', e); }
+  const w = 500, h = 600;
+  const left = Math.max(0, (screen.width  - w) / 2);
+  const top  = Math.max(0, (screen.height - h) / 2);
+  const popup = window.open(
+    'https://accounts.google.com/o/oauth2/v2/auth?' + params,
+    'google_login',
+    `width=${w},height=${h},left=${left},top=${top},menubar=no,toolbar=no`
+  );
+
+  // 모바일에서 팝업 차단된 경우
+  if (!popup || popup.closed) {
+    const errEl = document.getElementById('login-err');
+    if (errEl) {
+      errEl.innerHTML = '팝업이 차단되었습니다.<br>브라우저 주소창 옆 팝업 차단 아이콘을 탭하여 허용해 주세요.';
+      errEl.style.display = 'block';
     }
-  });
+    return;
+  }
+
+  // 팝업에서 redirect_uri로 돌아올 때 hash로 토큰 전달받음
+  const timer = setInterval(() => {
+    try {
+      if (popup.closed) { clearInterval(timer); return; }
+      const hash = popup.location.hash;
+      if (hash && hash.includes('id_token')) {
+        clearInterval(timer);
+        popup.close();
+        const p = new URLSearchParams(hash.slice(1));
+        const idToken = p.get('id_token');
+        if (idToken) onGoogleCallback({ credential: idToken });
+      }
+    } catch(e) { /* cross-origin, 무시 */ }
+  }, 300);
 }
 
 async function onGoogleCallback(response) {
@@ -529,7 +551,7 @@ function logout(isAuto) {
   } else {
     errEl.style.display = 'none';
   }
-  if (typeof google !== 'undefined') google.accounts.id.disableAutoSelect();
+  try { if (typeof google !== 'undefined' && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect(); } catch(e) {}
 }
 
 // =========================================================
@@ -560,10 +582,6 @@ setInterval(() => {
 //  페이지 로드 → 세션 복원 or 로그인
 // =========================================================
 window.addEventListener('load', () => {
-  // URL 설정 패널 초기화
-  const savedUrl = getScriptUrl();
-  updateConfigPanel(savedUrl);
-
   // 세션 복원 시도
   const saved      = localStorage.getItem(SESSION_KEY);
   const lastActive = parseInt(localStorage.getItem(LAST_ACTIVE_KEY) || '0');
@@ -589,18 +607,17 @@ window.addEventListener('load', () => {
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem(LAST_ACTIVE_KEY);
   }
-  // GSI 라이브러리는 버튼 클릭 시 동적 로드됨 (loadGsi 함수)
-  // 페이지 로드 시 미리 로드해 두면 버튼 클릭 응답이 더 빠름
+  // 페이지 로드 시 GSI 백그라운드 프리로드 (버튼 클릭 응답 속도 향상)
   if (GOOGLE_CLIENT_ID !== 'YOUR_GOOGLE_CLIENT_ID_HERE') {
     loadGsi(() => {
-      // 세션 없는 상태에서 로드 완료되면 One Tap 조용히 시도
-      if (!currentUser) {
+      if (!currentUser && gsiReady) {
         try {
           google.accounts.id.initialize({
             client_id: GOOGLE_CLIENT_ID,
             callback: onGoogleCallback,
             auto_select: true,
             cancel_on_tap_outside: true,
+            use_fedcm_for_prompt: false,
           });
           google.accounts.id.prompt();
         } catch(e) {}
@@ -659,7 +676,7 @@ function callScriptJsonp(url, params) {
 }
 
 async function loadSheetData() {
-  const url = getScriptUrl();
+  const url = APPS_SCRIPT_URL;
   if (!url) {
     document.getElementById('auth-banner').className   = 'auth-banner error';
     document.getElementById('auth-banner').textContent = '⚠️ Apps Script URL을 먼저 설정해주세요.';
@@ -967,7 +984,7 @@ async function removeEntry(i) {
   const entry = entries[i];
 
   if (entry.synced) {
-    const url = getScriptUrl();
+    const url = APPS_SCRIPT_URL;
     if (url) {
       try {
         showToast('🗑 삭제 중...', 'success');
@@ -1004,7 +1021,7 @@ async function submitAll() {
   if (entries.reduce((s, e) => s + e.minutes, 0) > 1440) {
     showToast('24시간 초과로 등록할 수 없습니다', 'error'); return;
   }
-  const url = getScriptUrl();
+  const url = APPS_SCRIPT_URL;
   if (!url) { showToast('Apps Script URL을 먼저 설정해주세요', 'error'); return; }
 
   const btn = document.getElementById('submit-btn');
