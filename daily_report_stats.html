@@ -360,6 +360,7 @@ let charts     = {};
 // ═══════════════════════════════════════════════
 window.addEventListener('load', () => {
   initPeriod();
+  loadData();
 });
 
 function initPeriod() {
@@ -402,8 +403,8 @@ function callJsonp(url, params) {
 // ═══════════════════════════════════════════════
 async function loadData() {
   const url = APPS_SCRIPT_URL;
-
-
+  const lastUpdatedEl = document.getElementById('last-updated');
+  lastUpdatedEl.textContent = '⏳ 데이터 불러오는 중...';
   try {
     const res = await callJsonp(url, { action: 'getStats' });
     if (res.status !== 'ok') throw new Error(res.message || '오류');
@@ -436,6 +437,7 @@ async function loadData() {
     showToast(rawData.length + '건 데이터 로드 완료', 'ok');
 
   } catch(e) {
+    document.getElementById('last-updated').textContent = '❌ 로드 실패: ' + e.message;
     showToast('로드 실패: ' + e.message, 'err');
   } finally {
   }
