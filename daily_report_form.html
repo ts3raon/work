@@ -306,10 +306,13 @@
   <!-- 목록 카드 -->
   <div class="card" style="margin-top:14px;">
     <div class="card-section">
-      <div class="section-label" style="margin-bottom:12px">오늘 등록된 업무</div>
+      <div class="section-label" style="margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+        <span id="entry-list-label">등록된 업무</span>
+        <span id="entry-list-loading" style="display:none; font-size:11px; color:var(--text-muted); font-weight:400; text-transform:none; letter-spacing:0;">불러오는 중...</span>
+      </div>
       <div id="entry-list"><div class="empty-msg">등록된 항목이 없습니다</div></div>
       <div class="total-bar" id="total-bar" style="display:none">
-        <span class="total-label">&#128202; 오늘 총 지원시간</span>
+        <span class="total-label" id="total-label">&#128202; 총 지원시간</span>
         <div style="text-align:right">
           <div class="total-value" id="total-time"></div>
           <div class="total-warn" id="total-warn" style="display:none">24시간 초과!</div>
@@ -341,6 +344,8 @@ const GOOGLE_CLIENT_ID = '371926582033-tjn75tnp96qma0a12mc0loekn4qpqipt.apps.goo
 let currentUser  = null;   // { name, email, idToken }
 let allClients   = [];     // A탭 마스터 데이터
 let entries      = [];     // 현재 세션 입력 항목
+let allUserRows   = [];    // 서버에서 받아온 현재 사용자의 전체 등록 행 (날짜 무관 캐시)
+let entriesLoading = false;
 let editingIdx   = -1;
 let inputMode    = 'select';
 let selectedPjt  = null;
@@ -370,10 +375,15 @@ function getSelectedDate() {
 }
 
 function onReportDateChange() {
-  // 날짜 변경 시 미제출 항목이 있으면 경고
-  if (entries.length > 0) {
-    showToast('⚠️ 날짜가 변경되었습니다. 작성 중인 항목을 확인하세요.', 'error');
-  }
+  loadEntriesForDate(getSelectedDate());
+}
+
+function updateEntryListLabel() {
+  const sel = getSelectedDate();
+  const label = sel === _todayStr ? '오늘 등록된 업무' : `${sel} 등록된 업무`;
+  document.getElementById('entry-list-label').textContent = label;
+  document.getElementById('total-label').innerHTML =
+    '&#128202; ' + (sel === _todayStr ? '오늘 총 지원시간' : sel + ' 총 지원시간');
 }
 
 // =========================================================
@@ -708,7 +718,7 @@ async function loadSheetData() {
   document.getElementById('auth-banner').textContent = '⏳ 데이터 로딩 중...';
 
   try {
-    const data = await callScriptJsonp(url, { action: 'getData' });
+    const data = await callScriptJsonp(url, { action: 'getData', date: getSelectedDate() });
 
     if (data.status !== 'ok') throw new Error(data.message || '알 수 없는 오류');
 
@@ -719,24 +729,70 @@ async function loadSheetData() {
       workType: p.workType || '-'
     }));
 
-    const todayRows = (data.data.todayRows || []).filter(r =>
-      r.worker === currentUser.name || r.email === currentUser.email
-    );
-    if (todayRows.length > 0 && entries.length === 0) {
-      entries = todayRows.map(r => ({ ...r, synced: true }));
-      renderEntries();
-    }
+    // 서버가 selectedRows(날짜별) 또는 todayRows(구버전) 중 무엇을 주든 모두 수용
+    const rows = data.data.selectedRows || data.data.dateRows || data.data.todayRows || data.data.allRows || [];
+    allUserRows = rows.filter(r => r.worker === currentUser.name || r.email === currentUser.email);
 
     document.getElementById('auth-banner').style.display = 'none';
-
-    const msg = todayRows.length > 0
-      ? '📋 오늘 등록된 업무 ' + todayRows.length + '건 로드됨'
-      : '✅ 데이터 로드 완료 (프로젝트 ' + allClients.length + '건)';
-    showToast(msg, 'success');
+    applyRowsForSelectedDate(true);
 
   } catch(e) {
     document.getElementById('auth-banner').className   = 'auth-banner error';
     document.getElementById('auth-banner').textContent = '⚠️ 데이터 로딩 실패: ' + e.message + ' (보고서 작성은 가능합니다)';
+  }
+}
+
+// 캐시된 allUserRows 중 현재 선택된 날짜에 해당하는 것만 entries 에 반영
+function applyRowsForSelectedDate(showMsg) {
+  const sel = getSelectedDate();
+  const rowsForDate = allUserRows.filter(r => String(r.date || '').substring(0,10) === sel);
+
+  entries = rowsForDate.map(r => ({ ...r, synced: true }));
+  editingIdx = -1;
+  clearForm();
+  updateEntryListLabel();
+  renderEntries();
+
+  if (showMsg) {
+    const msg = entries.length > 0
+      ? `📋 ${sel} 등록된 업무 ${entries.length}건 로드됨`
+      : '✅ 데이터 로드 완료 (프로젝트 ' + allClients.length + '건)';
+    showToast(msg, 'success');
+  }
+}
+
+// 날짜 변경 시: 서버에서 다시 받아올 필요는 없고(이미 전체 캐시 보유),
+// 캐시에 해당 날짜 데이터가 전혀 없을 수도 있으니 서버에 재조회를 시도한다.
+async function loadEntriesForDate(dateStr) {
+  if (entriesLoading) return;
+  entriesLoading = true;
+
+  document.getElementById('entry-list-loading').style.display = 'inline';
+  updateEntryListLabel();
+
+  // 작성 중이던(미등록) 항목이 있으면 날짜 이동 전에 경고
+  const hasUnsynced = entries.some(e => !e.synced);
+  if (hasUnsynced) {
+    showToast('⚠️ 미등록 항목이 있어 날짜를 이동합니다. 등록 후 이동을 권장합니다.', 'error');
+  }
+
+  try {
+    const url = APPS_SCRIPT_URL;
+    if (url) {
+      const data = await callScriptJsonp(url, { action: 'getData', date: dateStr });
+      if (data.status === 'ok') {
+        const rows = data.data.selectedRows || data.data.dateRows || data.data.todayRows || data.data.allRows || [];
+        const fresh = rows.filter(r => r.worker === currentUser.name || r.email === currentUser.email);
+        // 캐시에서 해당 날짜의 기존 항목을 제거하고 새로 받아온 항목으로 교체
+        allUserRows = allUserRows.filter(r => String(r.date || '').substring(0,10) !== dateStr).concat(fresh);
+      }
+    }
+  } catch(e) {
+    console.warn('날짜별 데이터 재조회 실패, 캐시 데이터로 표시합니다:', e.message);
+  } finally {
+    entriesLoading = false;
+    document.getElementById('entry-list-loading').style.display = 'none';
+    applyRowsForSelectedDate(true);
   }
 }
 
@@ -1027,6 +1083,15 @@ async function removeEntry(i) {
   }
 
   entries.splice(i, 1);
+  // 캐시(allUserRows)에서도 동일 항목 제거 — 날짜 이동 후 되돌아와도 복원되지 않도록
+  if (entry.synced) {
+    const idx = allUserRows.findIndex(r =>
+      String(r.date || '').substring(0,10) === String(entry.date || '').substring(0,10) &&
+      r.client === entry.client && r.project === entry.project &&
+      (r.worker === entry.worker || r.email === entry.email)
+    );
+    if (idx !== -1) allUserRows.splice(idx, 1);
+  }
   if (editingIdx === i) { editingIdx = -1; clearForm(); }
   else if (editingIdx > i) editingIdx--;
   renderEntries();
@@ -1093,6 +1158,17 @@ async function submitAll() {
         delete entry.originalEntry;
         successCount++;
         renderEntries(); // 실시간으로 ✓ 등록됨 표시 업데이트
+
+        // 캐시(allUserRows) 동기화: 신규/수정 항목 반영
+        const cacheIdx = allUserRows.findIndex(r =>
+          String(r.date || '').substring(0,10) === String(entry.date || '').substring(0,10) &&
+          r.client === entry.client && r.project === entry.project &&
+          (r.worker === entry.worker || r.email === entry.email)
+        );
+        const cacheCopy = { ...entry };
+        delete cacheCopy.synced;
+        if (cacheIdx !== -1) allUserRows[cacheIdx] = cacheCopy;
+        else allUserRows.push(cacheCopy);
 
       } catch(e) {
         console.error('항목 저장 실패:', e);
